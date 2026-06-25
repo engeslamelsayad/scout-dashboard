@@ -211,6 +211,49 @@ def api_swipe_delete(item_id):
     return jsonify({"ok": True})
 
 
+# ═══ Railway API debug ════════════════════════════════════════════════════════
+
+@app.route("/api/railway/mutations")
+@login_required
+def api_railway_mutations():
+    """استعلام Railway API schema للعثور على الـ mutation الصح للـ cron"""
+    import requests as req
+    token = os.environ.get("RAILWAY_API_TOKEN", "")
+    if not token:
+        return jsonify({"error": "RAILWAY_API_TOKEN غير موجود"}), 400
+
+    introspect = """
+    { __schema { mutationType { fields {
+        name description
+        args { name type { name kind ofType { name } } }
+    }}}}
+    """
+    try:
+        resp = req.post(
+            "https://backboard.railway.app/graphql/v2",
+            json={"query": introspect},
+            headers={"Authorization": f"Bearer {token}",
+                     "Content-Type": "application/json"},
+            timeout=15
+        )
+        data = resp.json()
+        fields = (data.get("data", {})
+                      .get("__schema", {})
+                      .get("mutationType", {})
+                      .get("fields", []))
+        keywords = ["cron", "job", "trigger", "run", "execute", "deploy", "start"]
+        relevant = [
+            {"name": f["name"],
+             "desc": (f.get("description") or "")[:100],
+             "args": [a["name"] for a in f.get("args", [])]}
+            for f in fields
+            if any(k in f["name"].lower() for k in keywords)
+        ]
+        return jsonify({"total": len(fields), "relevant": relevant})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ═══ Telegram test ════════════════════════════════════════════════════════════
 
 @app.route("/api/telegram/test", methods=["POST"])
