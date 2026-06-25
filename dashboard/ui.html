@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scout Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0f0f0f;color:#e0e0e0;min-height:100vh;padding-bottom:80px}
+
+/* Header */
+.hdr{background:#1a1a1a;border-bottom:1px solid #2a2a2a;padding:12px 20px;
+  display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.hdr h1{font-size:16px;color:#fff;display:flex;align-items:center;gap:8px}
+.hdr-right{display:flex;align-items:center;gap:12px}
+.dot{width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block}
+.dot.red{background:#e55}
+.hdr-right span{font-size:12px;color:#888}
+.run-btn{padding:7px 14px;background:#7c5cfc;border:none;border-radius:7px;
+  color:#fff;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px}
+.run-btn:hover{background:#6a4de0}
+.run-btn:disabled{background:#333;color:#666;cursor:not-allowed}
+a.logout{color:#666;text-decoration:none;font-size:12px}
+a.logout:hover{color:#e55}
+
+/* Tabs */
+.tabs{display:flex;gap:0;background:#1a1a1a;border-bottom:1px solid #2a2a2a;
+  padding:0 20px;overflow-x:auto;white-space:nowrap}
+.tab{padding:11px 16px;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;
+  color:#777;background:none;border-top:none;border-left:none;border-right:none;flex-shrink:0}
+.tab.active{color:#fff;border-bottom-color:#7c5cfc}
+.tab:hover:not(.active){color:#bbb}
+
+/* Layout */
+.content{padding:20px;max-width:900px;margin:0 auto}
+.panel{display:none}.panel.active{display:block}
+
+/* Cards */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px}
+.stat{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:14px}
+.stat-val{font-size:26px;font-weight:600;color:#fff}
+.stat-label{font-size:11px;color:#777;margin-top:3px}
+
+.section{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:18px;margin-bottom:14px}
+.section h3{font-size:13px;font-weight:500;color:#ddd;margin-bottom:12px;
+  display:flex;align-items:center;justify-content:space-between}
+
+/* Tags */
+.tag{display:inline-flex;align-items:center;gap:5px;background:#252525;border-radius:6px;
+  padding:5px 9px;font-size:12px;margin:3px}
+.tag .x{cursor:pointer;color:#666;border:none;background:none;padding:0 2px;font-size:11px}
+.tag .x:hover{color:#e55}
+.badge{font-size:10px;padding:1px 6px;border-radius:4px;background:#7c5cfc33;color:#b39dff}
+
+/* Inputs */
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+input[type=text],input[type=number],input[type=password],select,textarea{
+  background:#0f0f0f;border:1px solid #2a2a2a;border-radius:7px;
+  padding:7px 11px;color:#e0e0e0;font-size:13px;outline:none;font-family:inherit}
+input[type=text]:focus,input[type=number]:focus,select:focus,textarea:focus{border-color:#7c5cfc}
+textarea{min-height:64px;resize:vertical;width:100%}
+.fw{width:100%}.sm{width:72px}
+
+/* Buttons */
+.btn{padding:7px 14px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:500}
+.btn-p{background:#7c5cfc;color:#fff}.btn-p:hover{background:#6a4de0}
+.btn-g{background:#252525;color:#ccc}.btn-g:hover{background:#333}
+.btn-r{background:#3d1a1a;color:#e55;border:1px solid #5a2020}.btn-r:hover{background:#4d2020}
+
+/* Checkboxes */
+.chk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.chk-item{display:flex;align-items:center;gap:8px;background:#0f0f0f;
+  border:1px solid #2a2a2a;border-radius:7px;padding:8px 11px;cursor:pointer}
+.chk-item input{accent-color:#7c5cfc;width:14px;height:14px}
+.chk-item label{font-size:12px;cursor:pointer}
+
+/* Toggle */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 0;border-bottom:1px solid #1e1e1e}
+.toggle-row:last-child{border:none}
+.toggle-label{font-size:13px;color:#ccc}
+.toggle-sub{font-size:11px;color:#666;margin-top:2px}
+.toggle{position:relative;width:38px;height:20px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:#2a2a2a;border-radius:20px;cursor:pointer;transition:.2s}
+.slider:before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;
+  background:#888;border-radius:50%;transition:.2s}
+.toggle input:checked+.slider{background:#7c5cfc}
+.toggle input:checked+.slider:before{transform:translateX(18px);background:#fff}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{color:#777;font-weight:500;padding:7px 10px;text-align:right;border-bottom:1px solid #222}
+td{padding:7px 10px;border-bottom:1px solid #1a1a1a;vertical-align:top}
+tr:last-child td{border:none}
+tr:hover td{background:#1e1e1e}
+.delta-pos{color:#22c55e;font-weight:500}
+.delta-neg{color:#e55;font-weight:500}
+.delta-zer{color:#666}
+
+/* Winners */
+.winner-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.winner-card{background:#141414;border:1px solid #2a2a2a;border-radius:9px;padding:14px;
+  display:flex;flex-direction:column;gap:8px}
+.winner-card:hover{border-color:#3a3a3a}
+.wc-head{display:flex;justify-content:space-between;align-items:flex-start}
+.wc-name{font-size:13px;font-weight:500;color:#fff}
+.wc-days{font-size:11px;padding:2px 7px;border-radius:10px;background:#2a1f00;
+  color:#fbbf24;white-space:nowrap}
+.wc-country{font-size:10px;color:#666}
+.wc-body{font-size:12px;color:#999;line-height:1.5;direction:rtl}
+.wc-footer{display:flex;gap:6px;margin-top:2px}
+
+/* Run log */
+.log-box{background:#080808;border:1px solid #222;border-radius:7px;padding:12px;
+  font-family:monospace;font-size:11px;color:#aaa;max-height:200px;overflow-y:auto;
+  white-space:pre-wrap;margin-top:10px}
+
+/* Themes */
+.theme-row{display:flex;align-items:center;gap:8px;padding:6px 0;
+  border-bottom:1px solid #1a1a1a;font-size:12px}
+.theme-row:last-child{border:none}
+.theme-date{color:#666;min-width:80px;flex-shrink:0}
+.theme-name{flex:1;color:#ddd}
+.theme-bar-wrap{width:80px;background:#222;border-radius:3px;height:5px;flex-shrink:0}
+.theme-bar-fill{height:100%;border-radius:3px;background:#7c5cfc}
+.theme-count{min-width:28px;text-align:left;color:#999}
+.theme-comp{color:#666;min-width:40px;text-align:left}
+
+/* Swipe */
+.swipe-card{background:#141414;border:1px solid #2a2a2a;border-radius:9px;padding:14px;margin-bottom:10px}
+.sc-head{display:flex;justify-content:space-between;margin-bottom:6px}
+.sc-name{font-size:13px;font-weight:500;color:#fff}
+.sc-date{font-size:11px;color:#555}
+.sc-body{font-size:12px;color:#999;margin-bottom:8px;direction:rtl;line-height:1.5}
+.sc-notes{font-size:12px;color:#7c9;font-style:italic;margin-bottom:6px}
+.sc-tags{font-size:11px;color:#77a;margin-bottom:8px}
+
+/* Alert settings */
+.al-item{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 0;border-bottom:1px solid #1e1e1e}
+.al-item:last-child{border:none}
+
+/* Save bar */
+.save-bar{position:fixed;bottom:0;left:0;right:0;background:#1a1a1a;
+  border-top:1px solid #2a2a2a;padding:12px 20px;display:flex;
+  align-items:center;justify-content:space-between;z-index:99}
+.save-msg{font-size:12px;color:#777}
+.save-msg.ok{color:#22c55e}.save-msg.err{color:#e55}
+
+/* Bar chart */
+.bar-row{display:flex;align-items:center;gap:8px;margin:4px 0}
+.bar-lbl{width:30px;font-size:11px;color:#777}
+.bar-wrap{flex:1;background:#222;border-radius:3px;height:5px}
+.bar-fill{height:100%;border-radius:3px;background:#7c5cfc}
+.bar-n{font-size:11px;color:#999;min-width:30px;text-align:left}
+
+.empty{color:#555;font-size:12px;padding:12px 0;text-align:center}
+.info{font-size:11px;color:#666;margin-top:6px}
+.cost-val{color:#fbbf24;font-weight:500}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1>🎯 Scout Dashboard</h1>
+  <div class="hdr-right">
+    <span id="run-indicator"><span class="dot" id="run-dot"></span> <span id="run-label">جاهز</span></span>
+    <button class="run-btn" id="run-now-btn" onclick="runNow()">▶ شغّل الآن</button>
+    <a href="/logout" class="logout">خروج</a>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="sw('overview',this)">📊 نظرة عامة</button>
+  <button class="tab" onclick="sw('search',this)">🔍 Search Terms</button>
+  <button class="tab" onclick="sw('competitors',this)">🏢 المنافسين</button>
+  <button class="tab" onclick="sw('countries',this)">🌍 الدول</button>
+  <button class="tab" onclick="sw('store',this)">🏪 المتجر</button>
+  <button class="tab" onclick="sw('winners',this);loadWinners()">🏆 Winners</button>
+  <button class="tab" onclick="sw('themes',this);loadThemes()">📈 الثيمات</button>
+  <button class="tab" onclick="sw('swipe',this);loadSwipe()">🗂 Swipe File</button>
+  <button class="tab" onclick="sw('settings',this)">⚙️ الإعدادات</button>
+</div>
+
+<div class="content">
+
+<!-- ══ OVERVIEW ══ -->
+<div id="panel-overview" class="panel active">
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-val" id="s-total">—</div><div class="stat-label">إجمالي الإعلانات</div></div>
+    <div class="stat"><div class="stat-val" id="s-run">—</div><div class="stat-label">آخر run</div></div>
+    <div class="stat"><div class="stat-val" id="s-conf">—</div><div class="stat-label">آخر ثقة</div></div>
+    <div class="stat"><div class="stat-val" id="s-type">—</div><div class="stat-label">آخر نتيجة</div></div>
+  </div>
+  <div class="section">
+    <h3>توزيع بالدول</h3>
+    <div id="by-country"></div>
+  </div>
+  <div class="section">
+    <h3>سجل آخر 20 Run
+      <button class="btn btn-g" onclick="loadRuns()" style="font-size:11px;padding:4px 10px">تحديث</button>
+    </h3>
+    <table id="runs-table">
+      <thead><tr><th>التاريخ</th><th>النوع</th><th>الثقة</th><th>الثيم</th></tr></thead>
+      <tbody id="runs-body"><tr><td colspan="4" class="empty">جار التحميل...</td></tr></tbody>
+    </table>
+  </div>
+  <div class="section">
+    <h3>تشغيل يدوي</h3>
+    <div style="font-size:12px;color:#888;margin-bottom:10px">شغّل الـ Scout فوراً من هنا بدون انتظار الـ cron اليومي.</div>
+    <button class="btn btn-p" onclick="runNow()">▶ شغّل الـ Scout الآن</button>
+    <div id="run-log" class="log-box" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ══ SEARCH TERMS ══ -->
+<div id="panel-search" class="panel">
+  <div class="section">
+    <h3>Search Terms الحالية</h3>
+    <div id="terms-list"></div>
+    <div class="info">التكلفة التقريبية لـ Apify Meta: <span class="cost-val" id="cost-calc">—</span> / شهر</div>
+  </div>
+  <div class="section">
+    <h3>إضافة Term جديد</h3>
+    <div class="row">
+      <input type="text" id="new-term" placeholder="الكلمة أو الاسم" style="flex:2;min-width:150px">
+      <input type="number" id="new-count" value="50" min="10" max="200" class="sm" title="عدد النتائج">
+      <select id="new-primary">
+        <option value="false">Secondary (10–50)</option>
+        <option value="true">Primary (100–200)</option>
+      </select>
+      <button class="btn btn-p" onclick="addTerm()">+ إضافة</button>
+    </div>
+    <div class="info">Primary = أوسع كلمة للفئة بـ count كبير. Secondary = مترادفات بـ count صغير للتوفير.</div>
+  </div>
+</div>
+
+<!-- ══ COMPETITORS ══ -->
+<div id="panel-competitors" class="panel">
+  <div class="section">
+    <h3>Page IDs المراقبة</h3>
+    <div id="pages-list"></div>
+  </div>
+  <div class="section">
+    <h3>إضافة منافس</h3>
+    <div class="row">
+      <input type="text" id="new-pid" placeholder="Page ID (رقم)" style="flex:1;min-width:140px">
+      <input type="text" id="new-pname" placeholder="اسم للتعريف" style="flex:2">
+      <button class="btn btn-p" onclick="addPage()">+ إضافة</button>
+    </div>
+    <div class="info">Page ID تلاقيه في رابط Facebook Ad Library عند البحث باسم المنافس</div>
+  </div>
+  <div class="section">
+    <h3>نشاط المنافسين — هذا الأسبوع مقارنة بالسابق
+      <button class="btn btn-g" onclick="loadActivity()" style="font-size:11px;padding:4px 10px">تحديث</button>
+    </h3>
+    <table>
+      <thead><tr><th>المنافس</th><th>الدولة</th><th>هذا الأسبوع</th><th>الأسبوع الماضي</th><th>التغيير</th><th>الإجمالي</th></tr></thead>
+      <tbody id="activity-body"><tr><td colspan="6" class="empty">اضغط تحديث</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══ COUNTRIES ══ -->
+<div id="panel-countries" class="panel">
+  <div class="section">
+    <h3>الدول المراقبة</h3>
+    <div class="chk-grid" id="country-grid">
+      {% for code, name in countries %}
+      <div class="chk-item">
+        <input type="checkbox" id="c-{{code}}" value="{{code}}" onchange="markDirty()">
+        <label for="c-{{code}}">{{name}} ({{code}})</label>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="section">
+    <h3>إعدادات المصادر والـ Scout</h3>
+    <div class="toggle-row">
+      <div><div class="toggle-label">TikTok Creative Center</div><div class="toggle-sub">يحتاج TIKTOK_COOKIES في Railway</div></div>
+      <label class="toggle"><input type="checkbox" id="use-tiktok" onchange="markDirty()"><span class="slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div><div class="toggle-label">عتبة الثقة (Confidence Floor)</div><div class="toggle-sub">تحتها الـ Scout لا يُصدر brief</div></div>
+      <input type="number" id="conf-floor" min="0.1" max="1" step="0.05" class="sm" onchange="markDirty()">
+    </div>
+    <div class="toggle-row">
+      <div><div class="toggle-label">حد الـ Longevity (أيام)</div><div class="toggle-sub">إعلان شغّال أكثر من كذا = رابح</div></div>
+      <input type="number" id="winner-days" min="7" max="90" class="sm" onchange="markDirty()">
+    </div>
+  </div>
+</div>
+
+<!-- ══ STORE ══ -->
+<div id="panel-store" class="panel">
+  <div class="section">
+    <h3>سياق المتجر — بيتحقن في تفكير الـ Scout</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div><label class="info" style="display:block;margin-bottom:4px">اسم البراند</label>
+        <input type="text" class="fw" id="store-name" oninput="markDirty()"></div>
+      <div><label class="info" style="display:block;margin-bottom:4px">الفئة</label>
+        <input type="text" class="fw" id="store-cat" placeholder="cosmetics, supplements..." oninput="markDirty()"></div>
+    </div>
+    <div style="margin-top:10px"><label class="info" style="display:block;margin-bottom:4px">السوق الأساسي</label>
+      <select id="store-country" class="fw" onchange="markDirty()">
+        {% for code, name in countries %}<option value="{{code}}">{{name}} ({{code}})</option>{% endfor %}
+      </select>
+    </div>
+    <div style="margin-top:10px"><label class="info" style="display:block;margin-bottom:4px">Brand Voice — نبرة البراند والجمهور</label>
+      <textarea class="fw" id="store-voice" oninput="markDirty()" placeholder="مثال: حنونة وعملية، بتخاطب المرأة اللي عندها وقت أقل..."></textarea></div>
+    <div style="margin-top:10px"><label class="info" style="display:block;margin-bottom:4px">الحملات الشغّالة دلوقتي</label>
+      <textarea class="fw" id="store-campaigns" oninput="markDirty()"></textarea></div>
+    <div style="margin-top:10px"><label class="info" style="display:block;margin-bottom:4px">الإعلانات الرابحة السابقة</label>
+      <textarea class="fw" id="store-winners" oninput="markDirty()"></textarea></div>
+  </div>
+</div>
+
+<!-- ══ WINNERS ══ -->
+<div id="panel-winners" class="panel">
+  <div class="section">
+    <h3>إعلانات شغّالة أكثر من
+      <input type="number" id="winners-days" value="14" min="7" max="90" class="sm" style="margin:0 6px">
+      يوم
+      <button class="btn btn-g" onclick="loadWinners()" style="font-size:11px;padding:4px 10px">تحديث</button>
+    </h3>
+    <div class="info" style="margin-bottom:12px">اضغط 🗂 على أي إعلان لحفظه في الـ Swipe File</div>
+    <div id="winners-grid" class="winner-grid"><div class="empty">جار التحميل...</div></div>
+  </div>
+</div>
+
+<!-- ══ THEMES ══ -->
+<div id="panel-themes" class="panel">
+  <div class="section">
+    <h3>تاريخ الثيمات عبر الـ Runs
+      <button class="btn btn-g" onclick="loadThemes()" style="font-size:11px;padding:4px 10px">تحديث</button>
+    </h3>
+    <div id="themes-list"><div class="empty">جار التحميل...</div></div>
+  </div>
+</div>
+
+<!-- ══ SWIPE FILE ══ -->
+<div id="panel-swipe" class="panel">
+  <div class="section">
+    <h3>Swipe File — إعلانات حفظتها
+      <button class="btn btn-g" onclick="loadSwipe()" style="font-size:11px;padding:4px 10px">تحديث</button>
+    </h3>
+    <div id="swipe-list"><div class="empty">جار التحميل...</div></div>
+  </div>
+</div>
+
+<!-- ══ SETTINGS ══ -->
+<div id="panel-settings" class="panel">
+  <div class="section">
+    <h3>إعدادات التنبيهات (تيليجرام)</h3>
+    <div class="al-item">
+      <div><div class="toggle-label">تنبيه منافس جديد</div><div class="toggle-sub">لما براند جديد يظهر في السوق</div></div>
+      <label class="toggle"><input type="checkbox" id="al-new-comp" onchange="markDirty()"><span class="slider"></span></label>
+    </div>
+    <div class="al-item">
+      <div><div class="toggle-label">Digest الإعلانات الرابحة</div><div class="toggle-sub">روابط يومية لأطول الإعلانات عمراً</div></div>
+      <label class="toggle"><input type="checkbox" id="al-winners" onchange="markDirty()"><span class="slider"></span></label>
+    </div>
+    <div class="al-item">
+      <div><div class="toggle-label">حد أيام الـ Digest</div><div class="toggle-sub">إعلانات شغّالة أكثر من كذا يوم تُرسَل</div></div>
+      <input type="number" id="al-days" min="7" max="60" class="sm" onchange="markDirty()">
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
+      <button class="btn btn-g" onclick="testTelegram()">📨 اختبار تيليجرام</button>
+      <span id="tg-test-msg" style="font-size:12px;color:#777"></span>
+    </div>
+  </div>
+  <div class="section">
+    <h3>الجدول الزمني للـ Cron</h3>
+    <div style="font-size:12px;color:#888;margin-bottom:8px">
+      الـ cron محدد في <code style="background:#0f0f0f;padding:2px 6px;border-radius:4px">railway.toml</code>.
+      غيّره من هناك ثم redeploy.
+    </div>
+    <div style="background:#0f0f0f;border:1px solid #222;border-radius:7px;padding:10px 14px;font-family:monospace;font-size:12px;color:#7c9">
+      cronSchedule = "0 6 * * *"  ← يومي 06:00 UTC = 09:00 KSA
+    </div>
+    <div class="info" style="margin-top:6px">
+      لتغيير التوقيت: عدّل railway.toml → git push → Railway يعمل redeploy تلقائي.
+    </div>
+  </div>
+</div>
+
+</div><!-- /content -->
+
+<div class="save-bar">
+  <span class="save-msg" id="save-msg">جار التحميل...</span>
+  <button class="btn btn-p" id="save-btn" onclick="saveConfig()" disabled>💾 حفّظ الإعدادات</button>
+</div>
+
+<script>
+const CFG0   = {{ cfg|safe }};
+const STATS0 = {{ stats|safe }};
+let cfg   = JSON.parse(JSON.stringify(CFG0));
+let dirty = false;
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+function sw(id, btn) {
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── Dirty ─────────────────────────────────────────────────────────────────
+function markDirty() {
+  dirty = true;
+  document.getElementById('save-btn').disabled = false;
+  document.getElementById('save-msg').textContent = '⚠ تغييرات غير محفوظة';
+  document.getElementById('save-msg').className = 'save-msg';
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────
+function renderStats(s) {
+  document.getElementById('s-total').textContent = (s.total_ads||0).toLocaleString();
+  document.getElementById('s-run').textContent   = s.last_run || '—';
+  const ev = s.last_event || {};
+  document.getElementById('s-conf').textContent  = ev.confidence!=null ? (ev.confidence*100).toFixed(0)+'%' : '—';
+  const tEl = document.getElementById('s-type');
+  tEl.textContent = ev.type==='opportunity_brief' ? '✅ Brief' : ev.type==='noop' ? '⏸ Noop' : '—';
+  tEl.style.color = ev.type==='opportunity_brief' ? '#22c55e' : '#888';
+  const max = Math.max(...(s.by_country||[]).map(c=>c.count),1);
+  document.getElementById('by-country').innerHTML =
+    (s.by_country||[]).map(c=>
+      `<div class="bar-row">
+         <div class="bar-lbl">${c.country}</div>
+         <div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(c.count/max*100)}%"></div></div>
+         <div class="bar-n">${c.count}</div>
+       </div>`
+    ).join('') || '<div class="empty">لا بيانات</div>';
+}
+
+// ── Runs ──────────────────────────────────────────────────────────────────
+async function loadRuns() {
+  const r = await fetch('/api/runs').then(r=>r.json());
+  const TYPE = {opportunity_brief:'<span style="color:#22c55e">✅ Brief</span>',
+                noop:'<span style="color:#666">⏸ Noop</span>',
+                creative_digest_sent:'<span style="color:#77a">📨 Digest</span>'};
+  document.getElementById('runs-body').innerHTML = r.length
+    ? r.map(e=>`<tr>
+        <td>${e.ts}</td>
+        <td>${TYPE[e.type]||e.type}</td>
+        <td>${e.confidence>0?(e.confidence*100).toFixed(0)+'%':'—'}</td>
+        <td style="color:#999">${e.theme||'—'}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="4" class="empty">لا يوجد runs بعد</td></tr>';
+}
+
+// ── Manual run ────────────────────────────────────────────────────────────
+let runPollTimer = null;
+async function runNow() {
+  const btn = document.getElementById('run-now-btn');
+  btn.disabled = true;
+  const resp = await fetch('/api/run', {method:'POST'}).then(r=>r.json());
+  if (!resp.ok && resp.error === 'railway_cron') {
+    document.getElementById('run-log').style.display = 'block';
+    document.getElementById('run-log').textContent = resp.message;
+    btn.disabled = false;
+    return;
+  }
+  if (!resp.ok) { alert(resp.error || 'خطأ'); btn.disabled=false; return; }
+  document.getElementById('run-log').style.display = 'block';
+  runPollTimer = setInterval(pollRunStatus, 3000);
+}
+async function pollRunStatus() {
+  const s = await fetch('/api/run/status').then(r=>r.json());
+  const log = document.getElementById('run-log');
+  const dot = document.getElementById('run-dot');
+  const lbl = document.getElementById('run-label');
+  if (s.running) {
+    dot.className='dot red'; lbl.textContent='جار التشغيل...';
+    log.textContent = (s.log||[]).join('\n') || 'جار التشغيل...';
+    log.scrollTop = log.scrollHeight;
+  } else {
+    clearInterval(runPollTimer);
+    dot.className='dot'; lbl.textContent='جاهز';
+    log.textContent = (s.log||[]).join('\n') + '\n' + (s.done_msg||'');
+    log.scrollTop = log.scrollHeight;
+    document.getElementById('run-now-btn').disabled = false;
+    loadRuns();
+  }
+}
+
+// ── Terms ─────────────────────────────────────────────────────────────────
+function renderTerms() {
+  const terms = cfg.search_terms_config || [];
+  const countries = (cfg.countries||[]).length || 1;
+  document.getElementById('terms-list').innerHTML = terms.length
+    ? terms.map((t,i)=>
+        `<span class="tag">
+           ${t.primary?'<span class="badge">primary</span>':''}
+           ${t.term} <small style="color:#666">(${t.count})</small>
+           <button class="x" onclick="removeTerm(${i})">✕</button>
+         </span>`
+      ).join('')
+    : '<div class="empty">لا يوجد — أضف من أسفل</div>';
+  const total = terms.reduce((s,t)=>s+(t.count*countries),0);
+  document.getElementById('cost-calc').textContent =
+    `~$${(total*0.00075*30).toFixed(2)} (${total.toLocaleString()} result/run)`;
+}
+function addTerm() {
+  const t = document.getElementById('new-term').value.trim();
+  if (!t) return;
+  const count = parseInt(document.getElementById('new-count').value)||50;
+  const isPrimary = document.getElementById('new-primary').value==='true';
+  cfg.search_terms_config = cfg.search_terms_config||[];
+  cfg.search_terms_config.push({term:t,count,primary:isPrimary});
+  document.getElementById('new-term').value='';
+  renderTerms(); markDirty();
+}
+function removeTerm(i) { cfg.search_terms_config.splice(i,1); renderTerms(); markDirty(); }
+
+// ── Pages ─────────────────────────────────────────────────────────────────
+function renderPages() {
+  const pages = cfg.competitor_page_ids||[];
+  const names = cfg.competitor_names||{};
+  document.getElementById('pages-list').innerHTML = pages.length
+    ? pages.map((pid,i)=>
+        `<span class="tag">
+           ${names[pid]?`<strong>${names[pid]}</strong> — `:''}${pid}
+           <button class="x" onclick="removePage(${i})">✕</button>
+         </span>`
+      ).join('')
+    : '<div class="empty">لا يوجد — أضف من أسفل</div>';
+}
+function addPage() {
+  const pid = document.getElementById('new-pid').value.trim();
+  const name = document.getElementById('new-pname').value.trim();
+  if (!pid) return;
+  cfg.competitor_page_ids = cfg.competitor_page_ids||[];
+  cfg.competitor_names    = cfg.competitor_names||{};
+  if (!cfg.competitor_page_ids.includes(pid)) {
+    cfg.competitor_page_ids.push(pid);
+    if (name) cfg.competitor_names[pid] = name;
+  }
+  document.getElementById('new-pid').value='';
+  document.getElementById('new-pname').value='';
+  renderPages(); markDirty();
+}
+function removePage(i) {
+  const pid = cfg.competitor_page_ids[i];
+  cfg.competitor_page_ids.splice(i,1);
+  if(cfg.competitor_names) delete cfg.competitor_names[pid];
+  renderPages(); markDirty();
+}
+
+async function loadActivity() {
+  const data = await fetch('/api/competitors/activity').then(r=>r.json());
+  const tbody = document.getElementById('activity-body');
+  if (!data.length) { tbody.innerHTML='<tr><td colspan="6" class="empty">لا بيانات كافية بعد</td></tr>'; return; }
+  tbody.innerHTML = data.map(c=>{
+    const d = c.delta;
+    const dc = d>0?'delta-pos':d<0?'delta-neg':'delta-zer';
+    const ds = d>0?`+${d}`:d;
+    return `<tr>
+      <td style="font-weight:500">${c.page_name}</td>
+      <td style="color:#666">${c.country}</td>
+      <td>${c.this_week}</td>
+      <td>${c.last_week}</td>
+      <td class="${dc}">${ds}</td>
+      <td style="color:#666">${c.total}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Countries ─────────────────────────────────────────────────────────────
+function renderCountries() {
+  (cfg.countries||[]).forEach(c=>{
+    const el = document.getElementById('c-'+c);
+    if (el) el.checked = true;
+  });
+  document.getElementById('use-tiktok').checked   = !!cfg.use_tiktok;
+  document.getElementById('conf-floor').value      = cfg.confidence_floor ?? 0.60;
+  document.getElementById('winner-days').value     = cfg.winner_days_threshold ?? 30;
+}
+
+// ── Store ─────────────────────────────────────────────────────────────────
+function renderStore() {
+  const s = cfg.store||{};
+  document.getElementById('store-name').value      = s.name||'';
+  document.getElementById('store-cat').value       = s.category||'';
+  document.getElementById('store-country').value   = s.country||'SA';
+  document.getElementById('store-voice').value     = s.brand_voice||'';
+  document.getElementById('store-campaigns').value = s.current_campaigns||'';
+  document.getElementById('store-winners').value   = s.past_winners||'';
+}
+
+// ── Winners ───────────────────────────────────────────────────────────────
+async function loadWinners() {
+  const days = document.getElementById('winners-days')?.value || 14;
+  const data = await fetch(`/api/winners?min_days=${days}`).then(r=>r.json());
+  const grid = document.getElementById('winners-grid');
+  if (!data.length) { grid.innerHTML='<div class="empty">لا يوجد إعلانات تتجاوز '+days+' يوم بعد</div>'; return; }
+  grid.innerHTML = data.map(ad=>
+    `<div class="winner-card">
+       <div class="wc-head">
+         <div><div class="wc-name">${ad.page_name||'—'}</div>
+           <div class="wc-country">${ad.country||''}</div></div>
+         <span class="wc-days">${ad.days} يوم</span>
+       </div>
+       <div class="wc-body">${(ad.body||'').slice(0,120)}${(ad.body||'').length>120?'...':''}</div>
+       <div class="wc-footer">
+         ${ad.snapshot_url?`<a href="${ad.snapshot_url}" target="_blank" class="btn btn-g" style="font-size:11px;padding:4px 10px;text-decoration:none">🔗 شوف</a>`:''}
+         <button class="btn btn-g" style="font-size:11px;padding:4px 10px"
+           onclick='saveToSwipe(${JSON.stringify(ad)})'>🗂 حفّظ</button>
+       </div>
+     </div>`
+  ).join('');
+}
+
+async function saveToSwipe(ad) {
+  const notes = prompt('ملاحظاتك على الإعلان (اختياري):') ?? '';
+  const tags  = prompt('تاجات (اختياري، مفصولة بفاصلة):') ?? '';
+  await fetch('/api/swipe', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      ad_id: ad.ad_id, page_name: ad.page_name, country: ad.country,
+      body: ad.body, snapshot_url: ad.snapshot_url, notes, tags
+    })
+  });
+  alert('✅ تم الحفظ في Swipe File');
+}
+
+// ── Themes ────────────────────────────────────────────────────────────────
+async function loadThemes() {
+  const data = await fetch('/api/themes').then(r=>r.json());
+  const max = Math.max(...data.map(t=>t.size), 1);
+  document.getElementById('themes-list').innerHTML = data.length
+    ? data.map(t=>
+        `<div class="theme-row">
+           <div class="theme-date">${t.run_date}</div>
+           <div class="theme-name">${t.theme||'—'}</div>
+           <div class="theme-bar-wrap"><div class="theme-bar-fill" style="width:${Math.round(t.size/max*100)}%"></div></div>
+           <div class="theme-count">${t.size}</div>
+           <div class="theme-comp" title="عدد المنافسين">👥${t.competitor_count}</div>
+         </div>`
+      ).join('')
+    : '<div class="empty">لا يوجد clusters بعد — انتظر أول run</div>';
+}
+
+// ── Swipe File ────────────────────────────────────────────────────────────
+async function loadSwipe() {
+  const data = await fetch('/api/swipe').then(r=>r.json());
+  document.getElementById('swipe-list').innerHTML = data.length
+    ? data.map(item=>
+        `<div class="swipe-card">
+           <div class="sc-head">
+             <div class="sc-name">${item.page_name} <span style="color:#666;font-size:11px">${item.country}</span></div>
+             <div class="sc-date">${item.saved_at}</div>
+           </div>
+           <div class="sc-body">${(item.body||'').slice(0,150)}</div>
+           ${item.notes?`<div class="sc-notes">📝 ${item.notes}</div>`:''}
+           ${item.tags?`<div class="sc-tags">🏷 ${item.tags}</div>`:''}
+           <div style="display:flex;gap:6px">
+             ${item.snapshot_url?`<a href="${item.snapshot_url}" target="_blank" class="btn btn-g" style="font-size:11px;padding:4px 10px;text-decoration:none">🔗 الإعلان</a>`:''}
+             <button class="btn btn-r" style="font-size:11px;padding:4px 10px"
+               onclick="deleteSwipe(${item.id})">🗑 حذف</button>
+           </div>
+         </div>`
+      ).join('')
+    : '<div class="empty">Swipe File فاضي — احفظ إعلانات من قسم Winners</div>';
+}
+async function deleteSwipe(id) {
+  if (!confirm('حذف هذا الإعلان من الـ Swipe File؟')) return;
+  await fetch('/api/swipe/'+id, {method:'DELETE'});
+  loadSwipe();
+}
+
+// ── Alert settings ────────────────────────────────────────────────────────
+function renderAlerts() {
+  const al = cfg.alert_settings||{};
+  document.getElementById('al-new-comp').checked = al.new_competitor !== false;
+  document.getElementById('al-winners').checked   = al.winning_creatives !== false;
+  document.getElementById('al-days').value         = al.winning_days_threshold ?? 14;
+}
+
+async function testTelegram() {
+  const msg = document.getElementById('tg-test-msg');
+  msg.textContent = 'جار الإرسال...'; msg.style.color='#888';
+  const r = await fetch('/api/telegram/test', {method:'POST'}).then(r=>r.json());
+  msg.textContent = r.ok ? '✅ وصلت!' : '❌ '+r.error;
+  msg.style.color = r.ok ? '#22c55e' : '#e55';
+}
+
+// ── Collect & Save ────────────────────────────────────────────────────────
+function collectConfig() {
+  const countries = [];
+  document.querySelectorAll('#country-grid input:checked').forEach(cb=>countries.push(cb.value));
+  cfg.countries           = countries;
+  cfg.use_tiktok          = document.getElementById('use-tiktok').checked;
+  cfg.confidence_floor    = parseFloat(document.getElementById('conf-floor').value)||0.60;
+  cfg.winner_days_threshold = parseInt(document.getElementById('winner-days').value)||30;
+  cfg.store = {
+    name:             document.getElementById('store-name').value,
+    category:         document.getElementById('store-cat').value,
+    country:          document.getElementById('store-country').value,
+    brand_voice:      document.getElementById('store-voice').value,
+    current_campaigns:document.getElementById('store-campaigns').value,
+    past_winners:     document.getElementById('store-winners').value,
+  };
+  cfg.alert_settings = {
+    new_competitor:         document.getElementById('al-new-comp').checked,
+    winning_creatives:      document.getElementById('al-winners').checked,
+    winning_days_threshold: parseInt(document.getElementById('al-days').value)||14,
+  };
+  return cfg;
+}
+
+async function saveConfig() {
+  const data = collectConfig();
+  const btn  = document.getElementById('save-btn');
+  const msg  = document.getElementById('save-msg');
+  btn.disabled = true; btn.textContent = 'جار الحفظ...';
+  try {
+    const r = await fetch('/api/config', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(data)
+    }).then(r=>r.json());
+    if (r.ok) {
+      dirty = false;
+      msg.textContent = '✅ تم الحفظ — سيُطبَّق في الـ run الجاي';
+      msg.className = 'save-msg ok';
+    } else throw new Error(JSON.stringify(r));
+  } catch(e) {
+    msg.textContent = '❌ '+e.message;
+    msg.className = 'save-msg err';
+    btn.disabled = false;
+  }
+  btn.textContent = '💾 حفّظ الإعدادات';
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+renderStats(STATS0);
+renderTerms();
+renderPages();
+renderCountries();
+renderStore();
+renderAlerts();
+loadRuns();
+document.getElementById('save-msg').textContent = '✅ جاهز';
+document.getElementById('save-msg').className = 'save-msg ok';
+</script>
+</body>
+</html>
