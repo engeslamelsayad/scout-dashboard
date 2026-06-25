@@ -454,36 +454,21 @@ async function loadRuns() {
 let runPollTimer = null;
 async function runNow() {
   const btn = document.getElementById('run-now-btn');
-  btn.disabled = true;
-  const resp = await fetch('/api/run', {method:'POST'}).then(r=>r.json());
-  if (!resp.ok && resp.error === 'railway_cron') {
-    document.getElementById('run-log').style.display = 'block';
-    document.getElementById('run-log').textContent = resp.message;
-    btn.disabled = false;
-    return;
-  }
-  if (!resp.ok) { alert(resp.error || 'خطأ'); btn.disabled=false; return; }
-  document.getElementById('run-log').style.display = 'block';
-  runPollTimer = setInterval(pollRunStatus, 3000);
-}
-async function pollRunStatus() {
-  const s = await fetch('/api/run/status').then(r=>r.json());
   const log = document.getElementById('run-log');
-  const dot = document.getElementById('run-dot');
-  const lbl = document.getElementById('run-label');
-  if (s.running) {
-    dot.className='dot red'; lbl.textContent='جار التشغيل...';
-    log.textContent = (s.log||[]).join('\n') || 'جار التشغيل...';
-    log.scrollTop = log.scrollHeight;
-  } else {
-    clearInterval(runPollTimer);
-    dot.className='dot'; lbl.textContent='جاهز';
-    log.textContent = (s.log||[]).join('\n') + '\n' + (s.done_msg||'');
-    log.scrollTop = log.scrollHeight;
-    document.getElementById('run-now-btn').disabled = false;
-    loadRuns();
+  btn.disabled = true;
+  btn.textContent = '⏳ جار الإرسال...';
+  log.style.display = 'block';
+  log.textContent = 'جار إرسال طلب التشغيل لـ Railway...';
+  try {
+    const resp = await fetch('/api/run', {method:'POST'}).then(r=>r.json());
+    log.textContent = resp.message || (resp.ok ? '✅ تم' : '❌ خطأ');
+  } catch(e) {
+    log.textContent = '❌ ' + e.message;
   }
+  btn.disabled = false;
+  btn.textContent = '▶ شغّل الآن';
 }
+// pollRunStatus not needed — using Railway API trigger
 
 // ── Terms ─────────────────────────────────────────────────────────────────
 function renderTerms() {
