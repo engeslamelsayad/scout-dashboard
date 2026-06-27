@@ -2,7 +2,7 @@
 Trigger the Scout cron service via Railway GraphQL API.
 
 Required env vars:
-  RAILWAY_API_TOKEN          — Personal Account Token (Account Settings → Tokens)
+  RAILWAY_API_TOKEN          — Personal Account Token
   RAILWAY_SCOUT_SERVICE_ID   — Scout service ID
   RAILWAY_ENVIRONMENT_ID     — environment ID
 """
@@ -24,23 +24,18 @@ def _post(token: str, query: str, variables: dict = None) -> dict:
     return resp.json()
 
 
-def _get_latest_deployment_id(token: str, service_id: str, environment_id: str) -> str | None:
+def _get_latest_deployment_id(token, service_id, environment_id) -> str | None:
     """اجيب آخر deployment ID للـ Scout service."""
     query = """
-    query Deployments($serviceId: String!, $environmentId: String!) {
-      deployments(
-        input: { serviceId: $serviceId, environmentId: $environmentId }
-      ) {
-        edges { node { id status createdAt } }
+    query Deps($serviceId: String!, $environmentId: String!) {
+      deployments(input: {serviceId: $serviceId, environmentId: $environmentId}) {
+        edges { node { id status } }
       }
     }
     """
     data = _post(token, query, {"serviceId": service_id, "environmentId": environment_id})
     edges = (data.get("data") or {}).get("deployments", {}).get("edges", [])
-    if not edges:
-        return None
-    # آخر deployment (الأحدث)
-    return edges[-1]["node"]["id"]
+    return edges[-1]["node"]["id"] if edges else None
 
 
 def trigger_scout_run() -> tuple[bool, str]:
@@ -53,62 +48,48 @@ def trigger_scout_run() -> tuple[bool, str]:
         "RAILWAY_SCOUT_SERVICE_ID": service_id,
         "RAILWAY_ENVIRONMENT_ID":   environment_id,
     }.items() if not v]
-
     if missing:
         return False, f"Variables ناقصة: {', '.join(missing)}"
 
-    # ── Step 1: اجيب الـ deployment ID ───────────────────────────────────
     deployment_id = _get_latest_deployment_id(token, service_id, environment_id)
-    if not deployment_id:
-        return False, "مش قادر أجيب الـ deployment ID — تحقق من RAILWAY_SCOUT_SERVICE_ID و RAILWAY_ENVIRONMENT_ID"
+    errors = []
 
-    # ── Step 2: deploymentInstanceExecutionCreate (زرار Trigger في Railway UI) ──
-    mutation_exec = """
-    mutation ExecutionCreate($input: DeploymentInstanceExecutionCreateInput!) {
-      deploymentInstanceExecutionCreate(input: $input)
-    }
-    """
-    try:
-        data = _post(token, mutation_exec, {
-            "input": {"deploymentId": deployment_id}
-        })
-        if "errors" not in data:
-            return True, f"✅ تم تشغيل الـ Scout — تحقق من Scout → Cron Runs"
-        exec_error = data["errors"][0].get("message", str(data["errors"]))
-    except Exception as e:
-        exec_error = str(e)
+    # ── 1: deploymentInstanceExecutionCreate بـ deploymentId ──────────────
+    if deployment_id:
+        m = """mutation($input: DeploymentInstanceExecutionCreateInput!) {
+          deploymentInstanceExecutionCreate(input: $input) }"""
+        d = _post(token, m, {"input": {"deploymentId": deployment_id}})
+        if "errors" not in d:
+            return True, "✅ تم تشغيل الـ Scout — تحقق من Scout → Cron Runs بعد دقيقتين"
+        errors.append(f"exec(deploymentId): {d['errors'][0].get('message','')}")
 
-    # ── Step 3: deploymentRestart fallback ────────────────────────────────
-    mutation_restart = """
-    mutation Restart($id: String!) { deploymentRestart(id: $id) }
-    """
-    try:
-        data = _post(token, mutation_restart, {"id": deployment_id})
-        if "errors" not in data:
-            return True, f"✅ تم restart الـ deployment (id: {deployment_id[:8]}...) — تحقق من Scout → Deployments"
-        restart_error = data["errors"][0].get("message", str(data["errors"]))
-    except Exception as e:
-        restart_error = str(e)
+    # ── 2: deploymentInstanceExecutionCreate بـ serviceId + environmentId ──
+    m2 = """mutation($input: DeploymentInstanceExecutionCreateInput!) {
+      deploymentInstanceExecutionCreate(input: $input) }"""
+    d2 = _post(token, m2, {"input": {
+        "serviceId": service_id, "environmentId": environment_id}})
+    if "errors" not in d2:
+        return True, "✅ تم تشغيل الـ Scout — تحقق من Scout → Cron Runs بعد دقيقتين"
+    errors.append(f"exec(serviceId): {d2['errors'][0].get('message','')}")
 
-    # ── Step 4: serviceInstanceRedeploy fallback ──────────────────────────
-    mutation_redeploy = """
-    mutation Redeploy($serviceId: String!, $environmentId: String!) {
-      serviceInstanceRedeploy(serviceId: $serviceId, environmentId: $environmentId)
-    }
-    """
-    try:
-        data = _post(token, mutation_redeploy, {
-            "serviceId": service_id, "environmentId": environment_id
-        })
-        if "errors" not in data:
-            return True, "✅ تم الـ redeploy — تحقق من Scout → Deployments"
-        redeploy_error = data["errors"][0].get("message", str(data["errors"]))
-    except Exception as e:
-        redeploy_error = str(e)
+    # ── 3: serviceInstanceDeployV2 (يرجع deployment ID — يشغّل run جديد) ──
+    m3 = """mutation($environmentId: String!, $serviceId: String!) {
+      serviceInstanceDeployV2(environmentId: $environmentId, serviceId: $serviceId) }"""
+    d3 = _post(token, m3, {"environmentId": environment_id, "serviceId": service_id})
+    if "errors" not in d3:
+        new_id = d3.get("data", {}).get("serviceInstanceDeployV2", "")
+        return True, f"✅ تم تشغيل الـ Scout (deployment: {str(new_id)[:8]}) — انتظر 2-3 دقائق للـ build"
+    errors.append(f"deployV2: {d3['errors'][0].get('message','')}")
 
-    return False, (
-        f"فشلت كل المحاولات:\n"
-        f"1. deploymentInstanceExecutionCreate: {exec_error}\n"
-        f"2. deploymentRestart: {restart_error}\n"
-        f"3. serviceInstanceRedeploy: {redeploy_error}"
-    )
+    # ── 4: serviceInstanceRedeploy (fallback دايماً بيشتغل) ───────────────
+    m4 = """mutation($serviceId: String!, $environmentId: String!) {
+      serviceInstanceRedeploy(serviceId: $serviceId, environmentId: $environmentId) }"""
+    d4 = _post(token, m4, {"serviceId": service_id, "environmentId": environment_id})
+    if "errors" not in d4:
+        return True, (
+            "✅ تم إرسال طلب الـ redeploy للـ Scout\n"
+            "⏳ انتظر 2-3 دقائق للـ build ثم تحقق من Scout → Cron Runs"
+        )
+    errors.append(f"redeploy: {d4['errors'][0].get('message','')}")
+
+    return False, "فشلت كل المحاولات:\n" + "\n".join(errors)
