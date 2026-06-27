@@ -222,6 +222,25 @@ def api_railway_mutations():
     if not token:
         return jsonify({"error": "RAILWAY_API_TOKEN غير موجود"}), 400
 
+    # أولاً نستعلم عن الـ input type بتاع deploymentInstanceExecutionCreate
+    introspect_input = """
+    {
+      __type(name: "DeploymentInstanceExecutionCreateInput") {
+        fields { name type { name kind ofType { name kind } } }
+      }
+    }
+    """
+    try:
+        resp_input = req.post(
+            "https://backboard.railway.app/graphql/v2",
+            json={"query": introspect_input},
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            timeout=15,
+        )
+        input_fields = (resp_input.json().get("data") or {}).get("__type", {}).get("fields", [])
+    except Exception:
+        input_fields = []
+
     introspect = """
     { __schema { mutationType { fields {
         name description
@@ -249,7 +268,7 @@ def api_railway_mutations():
             for f in fields
             if any(k in f["name"].lower() for k in keywords)
         ]
-        return jsonify({"total": len(fields), "relevant": relevant})
+        return jsonify({"total": len(fields), "relevant": relevant, "deploymentInstanceExecutionCreate_input": input_fields})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
