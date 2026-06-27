@@ -1,95 +1,34 @@
 """
-Trigger the Scout cron service via Railway GraphQL API.
+Trigger the Scout by inserting a run_trigger record in the shared Postgres DB.
+The Scout checks for pending triggers every 5 minutes (*/5 cron).
+Max wait: 5 minutes.
 
-Required env vars:
-  RAILWAY_API_TOKEN          — Personal Account Token
-  RAILWAY_SCOUT_SERVICE_ID   — Scout service ID
-  RAILWAY_ENVIRONMENT_ID     — environment ID
+NO Railway API token needed for this — just DATABASE_URL.
 """
 
 import os
-import requests
-
-RAILWAY_API = "https://backboard.railway.app/graphql/v2"
-
-
-def _post(token: str, query: str, variables: dict = None) -> dict:
-    resp = requests.post(
-        RAILWAY_API,
-        json={"query": query, "variables": variables or {}},
-        headers={"Authorization": f"Bearer {token}",
-                 "Content-Type":  "application/json"},
-        timeout=15,
-    )
-    return resp.json()
-
-
-def _get_latest_deployment_id(token, service_id, environment_id) -> str | None:
-    """اجيب آخر deployment ID للـ Scout service."""
-    query = """
-    query Deps($serviceId: String!, $environmentId: String!) {
-      deployments(input: {serviceId: $serviceId, environmentId: $environmentId}) {
-        edges { node { id status } }
-      }
-    }
-    """
-    data = _post(token, query, {"serviceId": service_id, "environmentId": environment_id})
-    edges = (data.get("data") or {}).get("deployments", {}).get("edges", [])
-    return edges[-1]["node"]["id"] if edges else None
+import psycopg
+from pgvector.psycopg import register_vector
 
 
 def trigger_scout_run() -> tuple[bool, str]:
-    token          = os.environ.get("RAILWAY_API_TOKEN", "")
-    service_id     = os.environ.get("RAILWAY_SCOUT_SERVICE_ID", "")
-    environment_id = os.environ.get("RAILWAY_ENVIRONMENT_ID", "")
+    database_url = os.environ.get("DATABASE_URL", "")
+    if not database_url:
+        return False, "DATABASE_URL غير موجود"
 
-    missing = [k for k, v in {
-        "RAILWAY_API_TOKEN":        token,
-        "RAILWAY_SCOUT_SERVICE_ID": service_id,
-        "RAILWAY_ENVIRONMENT_ID":   environment_id,
-    }.items() if not v]
-    if missing:
-        return False, f"Variables ناقصة: {', '.join(missing)}"
-
-    deployment_id = _get_latest_deployment_id(token, service_id, environment_id)
-    errors = []
-
-    # ── 1: deploymentInstanceExecutionCreate بـ deploymentId ──────────────
-    if deployment_id:
-        m = """mutation($input: DeploymentInstanceExecutionCreateInput!) {
-          deploymentInstanceExecutionCreate(input: $input) }"""
-        d = _post(token, m, {"input": {"deploymentId": deployment_id}})
-        if "errors" not in d:
-            return True, "✅ تم تشغيل الـ Scout — تحقق من Scout → Cron Runs بعد دقيقتين"
-        errors.append(f"exec(deploymentId): {d['errors'][0].get('message','')}")
-
-    # ── 2: deploymentInstanceExecutionCreate بـ serviceId + environmentId ──
-    m2 = """mutation($input: DeploymentInstanceExecutionCreateInput!) {
-      deploymentInstanceExecutionCreate(input: $input) }"""
-    d2 = _post(token, m2, {"input": {
-        "serviceId": service_id, "environmentId": environment_id}})
-    if "errors" not in d2:
-        return True, "✅ تم تشغيل الـ Scout — تحقق من Scout → Cron Runs بعد دقيقتين"
-    errors.append(f"exec(serviceId): {d2['errors'][0].get('message','')}")
-
-    # ── 3: serviceInstanceDeployV2 (يرجع deployment ID — يشغّل run جديد) ──
-    m3 = """mutation($environmentId: String!, $serviceId: String!) {
-      serviceInstanceDeployV2(environmentId: $environmentId, serviceId: $serviceId) }"""
-    d3 = _post(token, m3, {"environmentId": environment_id, "serviceId": service_id})
-    if "errors" not in d3:
-        new_id = d3.get("data", {}).get("serviceInstanceDeployV2", "")
-        return True, f"✅ تم تشغيل الـ Scout (deployment: {str(new_id)[:8]}) — انتظر 2-3 دقائق للـ build"
-    errors.append(f"deployV2: {d3['errors'][0].get('message','')}")
-
-    # ── 4: serviceInstanceRedeploy (fallback دايماً بيشتغل) ───────────────
-    m4 = """mutation($serviceId: String!, $environmentId: String!) {
-      serviceInstanceRedeploy(serviceId: $serviceId, environmentId: $environmentId) }"""
-    d4 = _post(token, m4, {"serviceId": service_id, "environmentId": environment_id})
-    if "errors" not in d4:
+    try:
+        conn = psycopg.connect(database_url)
+        register_vector(conn)
+        row = conn.execute(
+            "INSERT INTO run_triggers (source) VALUES ('dashboard') RETURNING id"
+        ).fetchone()
+        conn.commit()
+        conn.close()
+        trigger_id = row[0]
         return True, (
-            "✅ تم إرسال طلب الـ redeploy للـ Scout\n"
-            "⏳ انتظر 2-3 دقائق للـ build ثم تحقق من Scout → Cron Runs"
+            f"✅ تم إنشاء trigger #{trigger_id}\n"
+            f"⏳ الـ Scout هيلتقطه خلال 5 دقائق كحد أقصى\n"
+            f"تحقق من Scout → Cron Runs لمتابعة التشغيل"
         )
-    errors.append(f"redeploy: {d4['errors'][0].get('message','')}")
-
-    return False, "فشلت كل المحاولات:\n" + "\n".join(errors)
+    except Exception as e:
+        return False, f"❌ {e}"
