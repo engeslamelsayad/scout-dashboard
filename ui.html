@@ -825,6 +825,83 @@ renderAlerts();
 loadRuns();
 document.getElementById('save-msg').textContent = '✅ جاهز';
 document.getElementById('save-msg').className = 'save-msg ok';
+
+// ── Run Results ─────────────────────────────────────────────────────────────────
+let _rrData = [];
+
+async function loadRunResults() {
+  const grid = document.getElementById('rr-grid');
+  grid.innerHTML = '<div class="empty">جار التحميل...</div>';
+  let resp;
+  try {
+    resp = await fetch('/api/run-results').then(r=>r.json());
+  } catch(e) {
+    grid.innerHTML = '<div class="empty">خطأ: ' + e.message + '</div>';
+    return;
+  }
+  if (!resp || resp.error) {
+    grid.innerHTML = '<div class="empty">خطأ: ' + (resp && resp.error ? resp.error : 'غير معروف') + '</div>';
+    return;
+  }
+  _rrData = resp.ads || [];
+
+  const countries = [...new Set(_rrData.map(function(a){return a.country;}).filter(Boolean))].sort();
+  const sel = document.getElementById('rr-country');
+  sel.innerHTML = '<option value="">كل الدول</option>' +
+    countries.map(function(c){ return '<option value="' + c + '">' + c + '</option>'; }).join('');
+
+  document.getElementById('rr-meta').textContent =
+    resp.run_ts ? ('آخر run: ' + resp.run_ts) : '';
+
+  filterRR();
+}
+
+function filterRR() {
+  const country = document.getElementById('rr-country').value;
+  const source  = document.getElementById('rr-source').value;
+  const q       = document.getElementById('rr-search').value.toLowerCase();
+
+  const filtered = _rrData.filter(function(a) {
+    if (country && a.country !== country) return false;
+    if (source  && a.source  !== source)  return false;
+    if (q) {
+      const hay = ((a.page_name||'') + (a.body||'') + (a.title||'')).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('rr-count').textContent = filtered.length + ' إعلان';
+  const grid = document.getElementById('rr-grid');
+
+  if (!filtered.length) {
+    grid.innerHTML = '<div class="empty">لا توجد نتائج</div>';
+    return;
+  }
+
+  grid.innerHTML = filtered.map(function(ad) {
+    const body  = (ad.body || ad.title || '').slice(0, 120);
+    const src   = ad.source === 'tiktok_cc' ? 'TikTok' : 'Meta';
+    const days  = ad.days_running || 0;
+    const gold  = days >= 30;
+    const daysBg = gold ? '#2a1f00' : '#1a1a1a';
+    const daysCl = gold ? '#fbbf24' : '#666';
+    const link = ad.snapshot_url
+      ? '<a href="' + ad.snapshot_url + '" target="_blank" class="btn btn-g" style="font-size:11px;padding:4px 10px;text-decoration:none">شوف</a>'
+      : '';
+    return '<div class="winner-card" style="background:' + daysBg + '">'
+      + '<div class="wc-head">'
+      + '<div><div class="wc-name">' + (ad.page_name||'—') + '</div>'
+      + '<div class="wc-country">' + (ad.country||'') + ' · ' + src + '</div></div>'
+      + '<span class="wc-days" style="background:' + daysBg + ';color:' + daysCl + '">' + days + ' يوم</span>'
+      + '</div>'
+      + '<div class="wc-body">' + body + (body.length >= 120 ? '...' : '') + '</div>'
+      + '<div class="wc-footer">' + link + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+
 </script>
 </body>
 </html>

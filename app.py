@@ -181,16 +181,26 @@ def api_run_results():
     ).fetchall()
     conn.close()
 
-    cols = ["ad_id","page_name","country","source","body","title",
-            "description","snapshot_url","start_time","last_seen","days_running"]
     from datetime import timedelta as td
     KSA = td(hours=3)
     ads = []
     for r in rows:
-        d = dict(zip(cols, r))
-        d["last_seen"] = (r[9] + KSA).strftime("%Y-%m-%d %H:%M") if r[9] else ""
-        d["days_running"] = int(r[10] or 0)
-        ads.append(d)
+        # تحويل كل الـ datetimes لـ strings عشان JSON يشتغل
+        start = r[8]
+        last  = r[9]
+        ads.append({
+            "ad_id":       str(r[0] or ""),
+            "page_name":   str(r[1] or ""),
+            "country":     str(r[2] or ""),
+            "source":      str(r[3] or ""),
+            "body":        str(r[4] or ""),
+            "title":       str(r[5] or ""),
+            "description": str(r[6] or ""),
+            "snapshot_url":str(r[7] or ""),
+            "start_time":  (start + KSA).strftime("%Y-%m-%d") if start else "",
+            "last_seen":   (last  + KSA).strftime("%Y-%m-%d %H:%M") if last else "",
+            "days_running": int(r[10] or 0),
+        })
 
     return jsonify({
         "ads":    ads,
