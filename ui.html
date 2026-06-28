@@ -239,17 +239,23 @@ tr:hover td{background:#1e1e1e}
 <!-- ══ COMPETITORS ══ -->
 <div id="panel-competitors" class="panel">
   <div class="section">
-    <h3>Page IDs المراقبة</h3>
+    <h3>Page IDs المراقبة مباشرة</h3>
     <div id="pages-list"></div>
+    <div class="info" style="margin-top:8px">هذه الصفحات تُراقَب بالإضافة لنتائج الـ Search Terms</div>
   </div>
   <div class="section">
-    <h3>إضافة منافس</h3>
+    <h3>إضافة منافس يدوياً</h3>
     <div class="row">
       <input type="text" id="new-pid" placeholder="Page ID (رقم)" style="flex:1;min-width:140px">
       <input type="text" id="new-pname" placeholder="اسم للتعريف" style="flex:2">
       <button class="btn btn-p" onclick="addPage()">+ إضافة</button>
     </div>
-    <div class="info">Page ID تلاقيه في رابط Facebook Ad Library عند البحث باسم المنافس</div>
+  </div>
+  <div class="section">
+    <h3>منافسون مكتشفون من البيانات — اضغط + لإضافتهم للمراقبة المباشرة
+      <button class="btn btn-g" onclick="loadKnown()" style="font-size:11px;padding:4px 10px">تحديث</button>
+    </h3>
+    <div id="known-list"><div class="empty">اضغط تحديث</div></div>
   </div>
   <div class="section">
     <h3>نشاط المنافسين — هذا الأسبوع مقارنة بالسابق
@@ -495,9 +501,13 @@ function addTerm() {
   cfg.search_terms_config = cfg.search_terms_config||[];
   cfg.search_terms_config.push({term:t,count,primary:isPrimary});
   document.getElementById('new-term').value='';
-  renderTerms(); markDirty();
+  renderTerms(); autoSave('تم إضافة "' + t + '"');
 }
-function removeTerm(i) { cfg.search_terms_config.splice(i,1); renderTerms(); markDirty(); }
+function removeTerm(i) {
+  const t = cfg.search_terms_config[i]?.term || '';
+  cfg.search_terms_config.splice(i,1);
+  renderTerms(); autoSave('تم حذف "' + t + '"');
+}
 
 // ── Pages ─────────────────────────────────────────────────────────────────
 function renderPages() {
@@ -524,13 +534,48 @@ function addPage() {
   }
   document.getElementById('new-pid').value='';
   document.getElementById('new-pname').value='';
-  renderPages(); markDirty();
+  renderPages(); autoSave('تم إضافة ' + (name||pid));
 }
 function removePage(i) {
   const pid = cfg.competitor_page_ids[i];
+  const name = (cfg.competitor_names||{})[pid] || pid;
   cfg.competitor_page_ids.splice(i,1);
   if(cfg.competitor_names) delete cfg.competitor_names[pid];
-  renderPages(); markDirty();
+  renderPages(); autoSave('تم حذف ' + name);
+}
+
+async function loadKnown() {
+  const data = await fetch('/api/known-competitors').then(r=>r.json());
+  const saved = cfg.competitor_page_ids || [];
+  const names = cfg.competitor_names || {};
+  const list  = document.getElementById('known-list');
+  if (!data.length) { list.innerHTML='<div class="empty">لا توجد بيانات بعد</div>'; return; }
+  list.innerHTML = data.map(c => {
+    const already = saved.includes(c.page_id);
+    const btn = already
+      ? `<span style="font-size:10px;color:#22c55e;padding:4px 8px">✓ مضاف</span>`
+      : `<button class="btn btn-g" style="font-size:11px;padding:4px 10px"
+           onclick='quickAddPage("${c.page_id}","${c.page_name.replace(/"/g,"")}")'>+ إضافة</button>`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #1a1a1a">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500;color:#fff">${c.page_name}</div>
+        <div style="font-size:11px;color:#666">${c.page_id} · ${c.country} · ${c.ads} إعلان · منذ ${c.since}</div>
+      </div>
+      ${btn}
+    </div>`;
+  }).join('');
+}
+
+function quickAddPage(pid, name) {
+  cfg.competitor_page_ids = cfg.competitor_page_ids || [];
+  cfg.competitor_names    = cfg.competitor_names    || {};
+  if (!cfg.competitor_page_ids.includes(pid)) {
+    cfg.competitor_page_ids.push(pid);
+    cfg.competitor_names[pid] = name;
+  }
+  renderPages();
+  autoSave('تم إضافة ' + name);
+  loadKnown();
 }
 
 async function loadActivity() {
@@ -694,6 +739,28 @@ function collectConfig() {
     winning_days_threshold: parseInt(document.getElementById('al-days').value)||14,
   };
   return cfg;
+}
+
+async function autoSave(label) {
+  const data = collectConfig();
+  const msg  = document.getElementById('save-msg');
+  msg.textContent = 'جار الحفظ التلقائي...'; msg.className='save-msg';
+  try {
+    const r = await fetch('/api/config', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(data)
+    }).then(r=>r.json());
+    if (r.ok) {
+      dirty = false;
+      document.getElementById('save-btn').disabled = true;
+      msg.textContent = '✅ ' + (label||'تم الحفظ التلقائي');
+      msg.className = 'save-msg ok';
+    }
+  } catch(e) {
+    msg.textContent = '⚠ فشل الحفظ التلقائي — احفظ يدوياً';
+    msg.className = 'save-msg err';
+    markDirty();
+  }
 }
 
 async function saveConfig() {

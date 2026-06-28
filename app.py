@@ -159,6 +159,27 @@ def api_winners():
     return jsonify(winners)
 
 
+# ═══ Known competitors from DB ═══════════════════════════════════════════════
+
+@app.route("/api/known-competitors")
+@login_required
+def api_known_competitors():
+    """المنافسون المكتشفون من الـ DB مع الـ page_id الفعلي."""
+    conn = get_conn()
+    rows = conn.execute(
+        """SELECT page_name, page_id, country,
+                  COUNT(*) AS ads,
+                  MIN(first_seen)::date AS since
+           FROM competitor_snapshots
+           WHERE page_id IS NOT NULL AND page_id != ''
+           GROUP BY page_name, page_id, country
+           ORDER BY ads DESC LIMIT 40"""
+    ).fetchall()
+    conn.close()
+    cols = ["page_name", "page_id", "country", "ads", "since"]
+    return jsonify([dict(zip(cols, r)) | {"since": str(r[4])} for r in rows])
+
+
 # ═══ Competitor activity ══════════════════════════════════════════════════════
 
 @app.route("/api/competitors/activity")

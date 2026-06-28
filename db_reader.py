@@ -59,8 +59,8 @@ def get_stats(conn) -> dict:
         "SELECT type, confidence, ts FROM agent_events ORDER BY ts DESC LIMIT 1"
     ).fetchone()
 
-    last_run = conn.execute(
-        "SELECT MAX(run_date) FROM clusters"
+    last_event_ts = conn.execute(
+        "SELECT MAX(ts) FROM agent_events"
     ).fetchone()[0]
 
     return {
@@ -71,7 +71,7 @@ def get_stats(conn) -> dict:
             "confidence": round(float(last_event[1] or 0), 2),
             "ts":         last_event[2].strftime("%Y-%m-%d %H:%M UTC") if last_event[2] else "—",
         } if last_event else {},
-        "last_run": last_run.isoformat() if last_run else "لم يُشغَّل بعد",
+        "last_run": last_event_ts.strftime("%Y-%m-%d %H:%M") if last_event_ts else "لم يُشغَّل بعد",
     }
 
 
