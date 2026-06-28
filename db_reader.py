@@ -63,15 +63,22 @@ def get_stats(conn) -> dict:
         "SELECT MAX(ts) FROM agent_events"
     ).fetchone()[0]
 
+    from datetime import timedelta
+    def to_ksa(dt):
+        """UTC → KSA (UTC+3)"""
+        if not dt:
+            return None
+        return dt + timedelta(hours=3)
+
     return {
         "total_ads": total,
         "by_country": [{"country": r[0], "count": r[1]} for r in by_country],
         "last_event": {
             "type":       last_event[0],
             "confidence": round(float(last_event[1] or 0), 2),
-            "ts":         last_event[2].strftime("%Y-%m-%d %H:%M UTC") if last_event[2] else "—",
+            "ts":         to_ksa(last_event[2]).strftime("%Y-%m-%d %H:%M KSA") if last_event[2] else "—",
         } if last_event else {},
-        "last_run": last_event_ts.strftime("%Y-%m-%d %H:%M") if last_event_ts else "لم يُشغَّل بعد",
+        "last_run": to_ksa(last_event_ts).strftime("%Y-%m-%d %H:%M KSA") if last_event_ts else "لم يُشغَّل بعد",
     }
 
 
