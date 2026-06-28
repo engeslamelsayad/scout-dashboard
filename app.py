@@ -147,6 +147,58 @@ def api_run():
     return jsonify({"ok": ok, "message": message})
 
 
+# ═══ Run Results ═════════════════════════════════════════════════════════════
+
+@app.route("/api/run-results")
+@login_required
+def api_run_results():
+    """كل الإعلانات اللي شافها الـ Scout في آخر run."""
+    conn = get_conn()
+
+    # وقت آخر run من agent_events
+    last_event = conn.execute(
+        "SELECT ts FROM agent_events ORDER BY ts DESC LIMIT 1"
+    ).fetchone()
+
+    if not last_event or not last_event[0]:
+        conn.close()
+        return jsonify({"ads": [], "run_ts": None, "total": 0})
+
+    from datetime import timedelta
+    run_ts    = last_event[0]
+    run_start = run_ts - timedelta(hours=2)   # نافذة 2 ساعة تغطي مدة الـ run
+
+    rows = conn.execute(
+        """SELECT ad_id, page_name, country, source,
+                  body, title, description, snapshot_url,
+                  start_time, last_seen,
+                  EXTRACT(DAY FROM (now() - start_time))::int AS days_running
+           FROM competitor_snapshots
+           WHERE last_seen >= %s
+           ORDER BY page_name, last_seen DESC
+           LIMIT 500""",
+        (run_start,),
+    ).fetchall()
+    conn.close()
+
+    cols = ["ad_id","page_name","country","source","body","title",
+            "description","snapshot_url","start_time","last_seen","days_running"]
+    from datetime import timedelta as td
+    KSA = td(hours=3)
+    ads = []
+    for r in rows:
+        d = dict(zip(cols, r))
+        d["last_seen"] = (r[9] + KSA).strftime("%Y-%m-%d %H:%M") if r[9] else ""
+        d["days_running"] = int(r[10] or 0)
+        ads.append(d)
+
+    return jsonify({
+        "ads":    ads,
+        "run_ts": (run_ts + KSA).strftime("%Y-%m-%d %H:%M KSA"),
+        "total":  len(ads),
+    })
+
+
 # ═══ Winners ══════════════════════════════════════════════════════════════════
 
 @app.route("/api/winners")

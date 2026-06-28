@@ -177,6 +177,7 @@ tr:hover td{background:#1e1e1e}
   <button class="tab" onclick="sw('competitors',this)">🏢 المنافسين</button>
   <button class="tab" onclick="sw('countries',this)">🌍 الدول</button>
   <button class="tab" onclick="sw('store',this)">🏪 المتجر</button>
+  <button class="tab" onclick="sw('runresults',this);loadRunResults()">📋 Run Results</button>
   <button class="tab" onclick="sw('winners',this);loadWinners()">🏆 Winners</button>
   <button class="tab" onclick="sw('themes',this);loadThemes()">📈 الثيمات</button>
   <button class="tab" onclick="sw('swipe',this);loadSwipe()">🗂 Swipe File</button>
@@ -319,6 +320,34 @@ tr:hover td{background:#1e1e1e}
       <textarea class="fw" id="store-campaigns" oninput="markDirty()"></textarea></div>
     <div style="margin-top:10px"><label class="info" style="display:block;margin-bottom:4px">الإعلانات الرابحة السابقة</label>
       <textarea class="fw" id="store-winners" oninput="markDirty()"></textarea></div>
+  </div>
+</div>
+
+<!-- ══ RUN RESULTS ══ -->
+<div id="panel-runresults" class="panel">
+  <div class="section">
+    <h3 id="rr-title">نتائج آخر Run
+      <span id="rr-meta" style="font-size:11px;color:#666;font-weight:400;margin-right:8px"></span>
+      <button class="btn btn-g" onclick="loadRunResults()" style="font-size:11px;padding:4px 10px">تحديث</button>
+    </h3>
+
+    <!-- فلاتر سريعة -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+      <select id="rr-country" onchange="filterRR()" style="background:#0f0f0f;border:1px solid #2a2a2a;border-radius:7px;padding:6px 10px;color:#e0e0e0;font-size:12px;outline:none">
+        <option value="">كل الدول</option>
+      </select>
+      <select id="rr-source" onchange="filterRR()" style="background:#0f0f0f;border:1px solid #2a2a2a;border-radius:7px;padding:6px 10px;color:#e0e0e0;font-size:12px;outline:none">
+        <option value="">كل المصادر</option>
+        <option value="apify_meta">Meta</option>
+        <option value="tiktok_cc">TikTok</option>
+      </select>
+      <input type="text" id="rr-search" oninput="filterRR()" placeholder="ابحث في النص أو الاسم..." style="background:#0f0f0f;border:1px solid #2a2a2a;border-radius:7px;padding:6px 10px;color:#e0e0e0;font-size:12px;outline:none;flex:1;min-width:180px">
+      <span id="rr-count" style="font-size:11px;color:#666"></span>
+    </div>
+
+    <div id="rr-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">
+      <div class="empty">اضغط تحديث</div>
+    </div>
   </div>
 </div>
 
