@@ -155,22 +155,22 @@ def api_run_results():
     """كل الإعلانات اللي شافها الـ Scout في آخر run."""
     conn = get_conn()
 
-    # وقت آخر run من agent_events
-    last_event = conn.execute(
-        "SELECT ts FROM agent_events ORDER BY ts DESC LIMIT 1"
+    # وقت آخر run — MAX(last_seen) كـ fallback لو agent_events فاضية
+    from datetime import timedelta
+    last_seen_row = conn.execute(
+        "SELECT MAX(last_seen) FROM competitor_snapshots"
     ).fetchone()
 
-    if not last_event or not last_event[0]:
+    if not last_seen_row or not last_seen_row[0]:
         conn.close()
         return jsonify({"ads": [], "run_ts": None, "total": 0})
 
-    from datetime import timedelta
-    run_ts    = last_event[0]
-    run_start = run_ts - timedelta(hours=2)   # نافذة 2 ساعة تغطي مدة الـ run
+    run_ts    = last_seen_row[0]
+    run_start = run_ts - timedelta(hours=2)
 
     rows = conn.execute(
         """SELECT ad_id, page_name, country, source,
-                  body, title, description, snapshot_url,
+                  body, title, description, snapshot_url, image_url,
                   start_time, last_seen,
                   EXTRACT(DAY FROM (now() - start_time))::int AS days_running
            FROM competitor_snapshots
@@ -185,21 +185,24 @@ def api_run_results():
     KSA = td(hours=3)
     ads = []
     for r in rows:
-        # تحويل كل الـ datetimes لـ strings عشان JSON يشتغل
-        start = r[8]
-        last  = r[9]
+        # cols: 0=ad_id 1=page_name 2=country 3=source 4=body
+        # 5=title 6=description 7=snapshot_url 8=image_url
+        # 9=start_time 10=last_seen 11=days_running
+        start = r[9]
+        last  = r[10]
         ads.append({
-            "ad_id":       str(r[0] or ""),
-            "page_name":   str(r[1] or ""),
-            "country":     str(r[2] or ""),
-            "source":      str(r[3] or ""),
-            "body":        str(r[4] or ""),
-            "title":       str(r[5] or ""),
-            "description": str(r[6] or ""),
-            "snapshot_url":str(r[7] or ""),
-            "start_time":  (start + KSA).strftime("%Y-%m-%d") if start else "",
+            "ad_id":        str(r[0] or ""),
+            "page_name":    str(r[1] or ""),
+            "country":      str(r[2] or ""),
+            "source":       str(r[3] or ""),
+            "body":         str(r[4] or ""),
+            "title":        str(r[5] or ""),
+            "description":  str(r[6] or ""),
+            "snapshot_url": str(r[7] or ""),
+            "image_url":    str(r[8] or ""),
+            "start_time":   (start + KSA).strftime("%Y-%m-%d") if start else "",
             "last_seen":   (last  + KSA).strftime("%Y-%m-%d %H:%M") if last else "",
-            "days_running": int(r[10] or 0),
+            "days_running": int(r[11] or 0),
         })
 
     with_images = sum(1 for a in ads if a.get("image_url"))
