@@ -202,10 +202,12 @@ def api_run_results():
             "days_running": int(r[10] or 0),
         })
 
+    with_images = sum(1 for a in ads if a.get("image_url"))
     return jsonify({
         "ads":    ads,
         "run_ts": (run_ts + KSA).strftime("%Y-%m-%d %H:%M KSA"),
         "total":  len(ads),
+        "with_images": with_images,
     })
 
 

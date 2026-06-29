@@ -850,8 +850,17 @@ async function loadRunResults() {
   sel.innerHTML = '<option value="">كل الدول</option>' +
     countries.map(function(c){ return '<option value="' + c + '">' + c + '</option>'; }).join('');
 
+  const imgInfo = resp.with_images !== undefined
+    ? (' · صور: ' + resp.with_images + '/' + resp.total)
+    : '';
   document.getElementById('rr-meta').textContent =
-    resp.run_ts ? ('آخر run: ' + resp.run_ts) : '';
+    (resp.run_ts ? ('آخر run: ' + resp.run_ts) : '') + imgInfo;
+
+  // لو مفيش صور، اعرض تنبيه
+  if (resp.total > 0 && resp.with_images === 0) {
+    document.getElementById('rr-meta').textContent +=
+      ' — الإعلانات الحالية بدون صور (اتجمعت قبل تحديث الصور). شغّل run جديد.';
+  }
 
   filterRR();
 }
