@@ -898,19 +898,24 @@ function filterRR() {
     const link = ad.snapshot_url
       ? '<a href="' + ad.snapshot_url + '" target="_blank" class="btn btn-g" style="font-size:11px;padding:4px 10px;text-decoration:none">شوف</a>'
       : '';
-    return '<div class="winner-card" style="background:' + daysBg + '">'
-      + '<div class="wc-head">'
-      + '<div><div class="wc-name">' + (ad.page_name||'—') + '</div>'
-      + '<div class="wc-country">' + (ad.country||'') + ' · ' + src + '</div></div>'
-      + '<span class="wc-days" style="background:' + daysBg + ';color:' + daysCl + '">' + days + ' يوم</span>'
-      + '</div>'
-      + '<div class="wc-body">' + body + (body.length >= 120 ? '...' : '') + '</div>'
-      + '<div class="wc-footer">' + link + '</div>'
-      + '</div>';
-  }).join('');
-}
-
-
-</script>
-</body>
-</html>
+    const imgBlock = ad.image_url
+        ? '<div style="margin:-14px -14px 10px -14px;overflow:hidden;border-radius:9px 9px 0 0;background:#0f0f0f;min-height:140px;display:flex;align-items:center;justify-content:center">'
+          + '<img src="' + ad.image_url + '" loading="lazy" referrerpolicy="no-referrer"'
+          + ' style="width:100%;object-fit:cover;display:block;max-height:200px"'
+          + ' onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
+          + '<div style="display:none;flex-direction:column;align-items:center;gap:6px;color:#555;font-size:11px;padding:24px;text-align:center">'
+          + '<span style="font-size:28px">🖼</span>'
+          + '<a href="' + (ad.snapshot_url||'#') + '" target="_blank" style="color:#7c5cfc;font-size:11px">افتح لرؤية الصورة</a>'
+          + '</div></div>'
+        : '';
+      return '<div class="winner-card" style="background:' + daysBg + ';padding:14px">'
+        + imgBlock
+        + '<div class="wc-head">'
+        + '<div><div class="wc-name">' + (ad.page_name||'—') + '</div>'
+        + '<div class="wc-country">' + (ad.country||'') + ' · ' + src + '</div></div>'
+        + '<span class="wc-days" style="background:' + daysBg + ';color:' + daysCl + '">' + days + ' يوم</span>'
+        + '</div>'
+        + (body ? '<div class="wc-body" style="margin-top:6px">' + body + (body.length>=120?'...':'') + '</div>' : '')
+        + '<div class="wc-footer" style="margin-top:8px">' + link + '</div>'
+        + '</div>';
+    
