@@ -181,6 +181,7 @@ tr:hover td{background:#1e1e1e}
   <button class="tab" onclick="sw('winners',this);loadWinners()">🏆 Winners</button>
   <button class="tab" onclick="sw('themes',this);loadThemes()">📈 الثيمات</button>
   <button class="tab" onclick="sw('swipe',this);loadSwipe()">🗂 Swipe File</button>
+  <button class="tab" onclick="sw('marketintel',this)">🧠 Market Intel</button>
   <button class="tab" onclick="sw('settings',this)">⚙️ الإعدادات</button>
 </div>
 
@@ -234,6 +235,10 @@ tr:hover td{background:#1e1e1e}
       <button class="btn btn-p" onclick="addTerm()">+ إضافة</button>
     </div>
     <div class="info">Primary = أوسع كلمة للفئة بـ count كبير. Secondary = مترادفات بـ count صغير للتوفير.</div>
+    <div id="term-suggestions" style="margin-top:12px;display:none">
+      <div style="font-size:11px;color:#777;margin-bottom:6px">🤖 مقترحات AI — اضغط لإضافة:</div>
+      <div id="suggestion-chips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    </div>
   </div>
 </div>
 
@@ -345,7 +350,7 @@ tr:hover td{background:#1e1e1e}
       <span id="rr-count" style="font-size:11px;color:#666"></span>
     </div>
 
-    <div id="rr-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:14px">
+    <div id="rr-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));gap:14px">
       <div class="empty">اضغط تحديث</div>
     </div>
   </div>
@@ -358,6 +363,7 @@ tr:hover td{background:#1e1e1e}
       <input type="number" id="winners-days" value="14" min="7" max="90" class="sm" style="margin:0 6px">
       يوم
       <button class="btn btn-g" onclick="loadWinners()" style="font-size:11px;padding:4px 10px">تحديث</button>
+      <button class="btn btn-r" onclick="clearWinners()" style="font-size:11px;padding:4px 10px;margin-right:6px">🗑 مسح السجل</button>
     </h3>
     <div class="info" style="margin-bottom:12px">اضغط 🗂 على أي إعلان لحفظه في الـ Swipe File</div>
     <div id="winners-grid" class="winner-grid"><div class="empty">جار التحميل...</div></div>
@@ -381,6 +387,21 @@ tr:hover td{background:#1e1e1e}
       <button class="btn btn-g" onclick="loadSwipe()" style="font-size:11px;padding:4px 10px">تحديث</button>
     </h3>
     <div id="swipe-list"><div class="empty">جار التحميل...</div></div>
+  </div>
+</div>
+
+<!-- ══ MARKET INTEL ══ -->
+<div id="panel-marketintel" class="panel">
+  <div class="section">
+    <h3>🧠 Market Intelligence — تحليل جدوى السوق</h3>
+    <div style="font-size:12px;color:#888;margin-bottom:12px">
+      أدخل keyword المنتج أو اتركه فارغاً لتحليل كل بيانات الـ DB
+    </div>
+    <div class="row">
+      <input type="text" id="mi-keyword" placeholder="مثال: بروستاتا، Yularay، skincare..." class="fw" style="flex:3">
+      <button class="btn btn-p" onclick="runMarketIntel()">🔍 حلّل الآن</button>
+    </div>
+    <div id="mi-result" style="margin-top:16px"></div>
   </div>
 </div>
 
@@ -922,6 +943,219 @@ function filterRR() {
     
   }).join('');
   }
+
+
+
+// ── Winners Clear ─────────────────────────────────────────────────────────────
+async function clearWinners() {
+  if (!confirm('هذا سيمسح سجل الـ Winners المرسلة — ستظهر مجدداً في التقرير القادم. متأكد؟')) return;
+  const r = await fetch('/api/winners/clear', {method:'POST'}).then(r=>r.json());
+  alert(r.message || '✅ تم المسح');
+}
+
+// ── AI Term Suggestions ───────────────────────────────────────────────────────
+let _suggestTimer = null;
+document.addEventListener('DOMContentLoaded', function() {
+  const input = document.getElementById('new-term');
+  if (!input) return;
+  input.addEventListener('input', function() {
+    clearTimeout(_suggestTimer);
+    const term = this.value.trim();
+    if (term.length < 2) {
+      document.getElementById('term-suggestions').style.display = 'none';
+      return;
+    }
+    _suggestTimer = setTimeout(() => fetchSuggestions(term), 800);
+  });
+});
+
+async function fetchSuggestions(term) {
+  const existing = (cfg.search_terms_config||[]).map(t=>t.term).join(', ');
+  const box = document.getElementById('term-suggestions');
+  const chips = document.getElementById('suggestion-chips');
+  chips.innerHTML = '<span style="color:#666;font-size:11px">جار التحميل...</span>';
+  box.style.display = 'block';
+  try {
+    const r = await fetch('/api/suggest-terms', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({term, context: existing})
+    }).then(r=>r.json());
+    const sugs = r.suggestions || [];
+    if (!sugs.length) { box.style.display='none'; return; }
+    chips.innerHTML = sugs.map(s =>
+      `<button class="btn btn-g" style="font-size:12px;padding:5px 12px"
+         onclick="addSuggestion('${s.replace(/'/g,"\'")}')">+ ${s}</button>`
+    ).join('');
+  } catch(e) {
+    box.style.display = 'none';
+  }
+}
+
+function addSuggestion(term) {
+  cfg.search_terms_config = cfg.search_terms_config || [];
+  if (!cfg.search_terms_config.find(t => t.term === term)) {
+    cfg.search_terms_config.push({term, count: 50, primary: false});
+    renderTerms();
+    autoSave('تم إضافة "' + term + '"');
+  }
+  document.getElementById('term-suggestions').style.display = 'none';
+  document.getElementById('new-term').value = '';
+}
+
+// ── Market Intelligence ───────────────────────────────────────────────────────
+async function runMarketIntel() {
+  const keyword = document.getElementById('mi-keyword').value.trim();
+  const result  = document.getElementById('mi-result');
+  result.innerHTML = '<div style="color:#888;font-size:13px;padding:20px;text-align:center">🔍 جار التحليل... (10-20 ثانية)</div>';
+
+  const data = await fetch('/api/market-intel', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({keyword})
+  }).then(r=>r.json());
+
+  if (data.error && !data.stats) {
+    result.innerHTML = '<div style="color:#e55;font-size:13px;padding:16px">❌ ' + data.error + '</div>';
+    return;
+  }
+
+  const s = data.stats || {};
+  const a = data.analysis || {};
+
+  // درجة الجدوى
+  const scoreColor = a.viability_score >= 70 ? '#22c55e' :
+                     a.viability_score >= 50 ? '#fbbf24' : '#e55';
+  const signalColor = a.signal === 'شراء الآن' ? '#22c55e' :
+                      a.signal === 'انتظر'       ? '#fbbf24' : '#e55';
+
+  result.innerHTML = `
+  <!-- Header -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
+    ${a.viability_score !== undefined ? `
+    <div class="stat" style="text-align:center;border:2px solid ${scoreColor}33">
+      <div class="stat-val" style="color:${scoreColor};font-size:36px">${a.viability_score}</div>
+      <div class="stat-label">درجة الجدوى / 100</div>
+      <div style="font-size:11px;color:${scoreColor};margin-top:4px">${a.viability_label||''}</div>
+    </div>` : ''}
+    ${a.signal ? `
+    <div class="stat" style="text-align:center;border:2px solid ${signalColor}33">
+      <div class="stat-val" style="color:${signalColor};font-size:22px">${a.signal}</div>
+      <div class="stat-label" style="margin-top:6px">${a.signal_reason||''}</div>
+    </div>` : ''}
+    <div class="stat"><div class="stat-val">${s.total_ads||0}</div><div class="stat-label">إجمالي الإعلانات</div></div>
+    <div class="stat"><div class="stat-val">${s.total_advertisers||0}</div><div class="stat-label">المعلنون</div></div>
+    <div class="stat"><div class="stat-val">${s.avg_days||0} يوم</div><div class="stat-label">متوسط العمر</div></div>
+    <div class="stat"><div class="stat-val" style="color:#fbbf24">${s.veteran_pct||0}%</div><div class="stat-label">إعلانات +90 يوم</div></div>
+  </div>
+
+  <!-- Longevity Distribution -->
+  <div class="section" style="margin-bottom:14px">
+    <h3 style="margin-bottom:10px">📊 توزيع أعمار الإعلانات — مؤشر ربحية المنتج</h3>
+    ${(() => {
+      const d = s.age_dist || {};
+      const total = (d.new||0)+(d.mid||0)+(d.mature||0)+(d.veteran||0) || 1;
+      const bars = [
+        {label:'0-14 يوم', val:d.new||0, color:'#666'},
+        {label:'14-30 يوم', val:d.mid||0, color:'#7c5cfc'},
+        {label:'30-90 يوم', val:d.mature||0, color:'#fbbf24'},
+        {label:'+90 يوم (رابح)', val:d.veteran||0, color:'#22c55e'},
+      ];
+      return bars.map(b => {
+        const pct = Math.round(b.val/total*100);
+        return `<div style="display:flex;align-items:center;gap:8px;margin:5px 0">
+          <div style="width:110px;font-size:11px;color:#888;text-align:right;flex-shrink:0">${b.label}</div>
+          <div style="flex:1;background:#222;border-radius:4px;height:18px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:${b.color};border-radius:4px;
+                        display:flex;align-items:center;padding-right:6px;
+                        font-size:10px;color:#000;font-weight:500;justify-content:flex-end">
+              ${pct > 8 ? pct+'%' : ''}
+            </div>
+          </div>
+          <div style="font-size:11px;color:#ccc;min-width:30px">${b.val}</div>
+        </div>`;
+      }).join('');
+    })()}
+    ${a.longevity_verdict ? `<div style="margin-top:10px;font-size:12px;color:#aaa;background:#0f0f0f;padding:10px;border-radius:7px">${a.longevity_verdict}</div>` : ''}
+  </div>
+
+  <!-- Country Map -->
+  <div class="section" style="margin-bottom:14px">
+    <h3 style="margin-bottom:10px">🌍 خريطة الفرص بالدول</h3>
+    ${(() => {
+      const countries = s.by_country || [];
+      const maxAds = Math.max(...countries.map(c=>c.ads), 1);
+      return countries.map(c => {
+        const pct = Math.round(c.ads/maxAds*100);
+        const isBest = a.best_country && c.country === a.best_country;
+        return `<div style="display:flex;align-items:center;gap:8px;margin:5px 0">
+          <div style="width:40px;font-size:12px;color:${isBest?'#22c55e':'#888'};font-weight:${isBest?'500':'400'}">${c.country} ${isBest?'🎯':''}</div>
+          <div style="flex:1;background:#222;border-radius:4px;height:14px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:${isBest?'#22c55e55':'#7c5cfc44'};border-radius:4px"></div>
+          </div>
+          <div style="font-size:11px;color:#888;min-width:80px">${c.ads} إعلان · ${c.advertisers} معلن</div>
+        </div>`;
+      }).join('') || '<div class="empty">لا بيانات</div>';
+    })()}
+    ${a.best_country ? `<div style="margin-top:8px;font-size:12px;color:#22c55e">🎯 الأفضل: ${a.best_country} — ${a.best_country_reason||''}</div>` : ''}
+  </div>
+
+  <!-- Analysis Cards -->
+  ${a.winning_angles ? `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+    <div class="section" style="margin:0">
+      <h3 style="margin-bottom:8px">✅ الزوايا الرابحة</h3>
+      ${(a.winning_angles||[]).map(x=>`<div style="font-size:12px;padding:5px 0;border-bottom:1px solid #1a1a1a;color:#ccc">• ${x}</div>`).join('')}
+    </div>
+    <div class="section" style="margin:0">
+      <h3 style="margin-bottom:8px">⛔ تجنّب (مشبعة)</h3>
+      ${(a.avoid_angles||[]).map(x=>`<div style="font-size:12px;padding:5px 0;border-bottom:1px solid #1a1a1a;color:#888">• ${x}</div>`).join('')}
+    </div>
+  </div>` : ''}
+
+  ${a.dominant_hooks ? `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+    <div class="section" style="margin:0">
+      <h3 style="margin-bottom:8px">🪝 Hooks رابحة</h3>
+      ${(a.dominant_hooks||[]).map(x=>`<div style="font-size:12px;padding:5px 0;border-bottom:1px solid #1a1a1a;color:#ccc">• ${x}</div>`).join('')}
+    </div>
+    <div class="section" style="margin:0">
+      <h3 style="margin-bottom:8px">💰 نقاط السعر</h3>
+      ${(a.price_points||[]).map(x=>`<div style="font-size:12px;padding:5px 0;border-bottom:1px solid #1a1a1a;color:#fbbf24">• ${x}</div>`).join('')}
+    </div>
+  </div>` : ''}
+
+  <!-- Alerts & Timing -->
+  ${a.fatigue_alert ? `
+  <div class="section" style="margin-bottom:14px;border-color:#5a3a00">
+    <h3 style="color:#fbbf24">⚠️ Creative Fatigue Alert</h3>
+    <div style="font-size:12px;color:#aaa;margin-top:6px">${a.fatigue_alert}</div>
+  </div>` : ''}
+
+  ${a.new_entrants_signal ? `
+  <div class="section" style="margin-bottom:14px">
+    <h3>🆕 إشارة المنافسين الجدد (${s.new_entrants_14d} في آخر 14 يوم)</h3>
+    <div style="font-size:12px;color:#aaa;margin-top:6px">${a.new_entrants_signal}</div>
+  </div>` : ''}
+
+  ${a.entry_timing ? `
+  <div class="section" style="margin-bottom:14px;border-color:#1a3a1a">
+    <h3 style="color:#22c55e">📅 أفضل توقيت للدخول</h3>
+    <div style="font-size:12px;color:#aaa;margin-top:6px">${a.entry_timing}</div>
+  </div>` : ''}
+
+  <!-- Summary -->
+  ${a.summary ? `
+  <div style="background:#1a1a2e;border:1px solid #7c5cfc44;border-radius:10px;padding:16px">
+    <div style="font-size:12px;font-weight:500;color:#b39dff;margin-bottom:6px">📋 الملخص التنفيذي</div>
+    <div style="font-size:13px;color:#ddd;line-height:1.7">${a.summary}</div>
+  </div>` : ''}
+
+  <!-- Print Button -->
+  <div style="margin-top:16px;text-align:center">
+    <button class="btn btn-g" onclick="window.print()" style="padding:10px 24px">🖨️ طباعة / حفظ PDF</button>
+  </div>
+  `;
+}
+
 
 </script>
 </body>

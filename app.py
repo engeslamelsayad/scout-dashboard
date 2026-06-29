@@ -420,3 +420,231 @@ button:hover{background:#6a4de0}
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
+# ═══ AI Term Suggestions ══════════════════════════════════════════════════════
+
+@app.route("/api/suggest-terms", methods=["POST"])
+@login_required
+def api_suggest_terms():
+    """Claude يقترح search terms مرتبطة بالـ keyword."""
+    import requests as req
+    data    = request.get_json(force=True) or {}
+    term    = data.get("term", "").strip()
+    context = data.get("context", "")   # الـ search terms الموجودة
+
+    if not term:
+        return jsonify({"suggestions": []})
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return jsonify({"suggestions": [], "error": "ANTHROPIC_API_KEY not set"})
+
+    prompt = f"""أنت خبير في التسويق الإلكتروني في السوق العربي.
+المستخدم يبحث عن إعلانات منافسين في Meta Ad Library للـ keyword: "{term}"
+Search terms موجودة بالفعل: {context or "لا يوجد"}
+
+اقترح 6 search terms إضافية مختلفة تساعد على اكتشاف المزيد من المنافسين والإعلانات المرتبطة.
+فكر في: مرادفات، مشكلات العميل، أسماء منتجات شائعة، مصطلحات طبية/تقنية، عامية.
+أجب بـ JSON فقط: {{"suggestions": ["term1", "term2", ...]}}"""
+
+    try:
+        resp = req.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={"x-api-key": api_key, "anthropic-version": "2023-06-01",
+                     "content-type": "application/json"},
+            json={"model": "claude-haiku-4-5-20251001", "max_tokens": 300,
+                  "messages": [{"role": "user", "content": prompt}]},
+            timeout=15,
+        )
+        text = resp.json()["content"][0]["text"]
+        import json as _j
+        clean = text.strip().replace("```json","").replace("```","").strip()
+        return jsonify(_j.loads(clean))
+    except Exception as e:
+        return jsonify({"suggestions": [], "error": str(e)})
+
+
+# ═══ Winners Clear ════════════════════════════════════════════════════════════
+
+@app.route("/api/winners/clear", methods=["POST"])
+@login_required
+def api_winners_clear():
+    """امسح سجل الـ winners المرسلة عشان تظهر من جديد في الـ digest."""
+    conn = get_conn()
+    conn.execute("DELETE FROM agent_events WHERE type = 'creative_digest_sent'")
+    conn.commit()
+    count = conn.execute("SELECT changes()").fetchone()
+    conn.close()
+    return jsonify({"ok": True, "message": "تم مسح سجل الـ Winners — ستظهر مجدداً في التقرير الجاي"})
+
+
+# ═══ Market Intelligence ══════════════════════════════════════════════════════
+
+@app.route("/api/market-intel", methods=["POST"])
+@login_required
+def api_market_intel():
+    """تحليل شامل لجدوى السوق بناءً على بيانات الـ DB."""
+    import requests as req
+    import json as _j
+    from datetime import timedelta, datetime, timezone
+
+    data    = request.get_json(force=True) or {}
+    keyword = data.get("keyword", "").strip()
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+
+    conn = get_conn()
+    now  = datetime.now(timezone.utc)
+
+    # ── جمع البيانات من الـ DB ──────────────────────────────────────────────
+    # كل الإعلانات
+    rows = conn.execute(
+        """SELECT page_name, country,
+                  EXTRACT(DAY FROM (now()-start_time))::int AS days,
+                  body, title, start_time
+           FROM competitor_snapshots
+           WHERE start_time IS NOT NULL
+             AND (stop_time IS NULL OR stop_time > now())
+             AND (%s = '' OR
+                  body    ILIKE %s OR
+                  title   ILIKE %s OR
+                  page_name ILIKE %s)
+           ORDER BY days DESC LIMIT 300""",
+        (keyword, f"%{keyword}%", f"%{keyword}%", f"%{keyword}%")
+    ).fetchall()
+
+    # إحصائيات الدول
+    by_country = conn.execute(
+        """SELECT country, COUNT(*) as ads,
+                  COUNT(DISTINCT page_name) as advertisers,
+                  AVG(EXTRACT(DAY FROM (now()-start_time)))::int as avg_days
+           FROM competitor_snapshots
+           WHERE start_time IS NOT NULL AND (stop_time IS NULL OR stop_time > now())
+             AND (%s = '' OR body ILIKE %s OR title ILIKE %s OR page_name ILIKE %s)
+           GROUP BY country ORDER BY ads DESC""",
+        (keyword, f"%{keyword}%", f"%{keyword}%", f"%{keyword}%")
+    ).fetchall()
+
+    # المنافسون الجدد (آخر 14 يوم)
+    new_entrants = conn.execute(
+        """SELECT COUNT(DISTINCT page_name) FROM competitor_snapshots
+           WHERE first_seen >= now() - INTERVAL '14 days'
+             AND (%s = '' OR body ILIKE %s OR title ILIKE %s)""",
+        (keyword, f"%{keyword}%", f"%{keyword}%")
+    ).fetchone()[0]
+
+    # توزيع الأعمار
+    age_dist = conn.execute(
+        """SELECT
+             COUNT(*) FILTER (WHERE EXTRACT(DAY FROM (now()-start_time)) < 14) as new_ads,
+             COUNT(*) FILTER (WHERE EXTRACT(DAY FROM (now()-start_time)) BETWEEN 14 AND 30) as mid_ads,
+             COUNT(*) FILTER (WHERE EXTRACT(DAY FROM (now()-start_time)) BETWEEN 30 AND 90) as mature_ads,
+             COUNT(*) FILTER (WHERE EXTRACT(DAY FROM (now()-start_time)) > 90) as veteran_ads,
+             COUNT(DISTINCT page_name) as total_advertisers,
+             COUNT(*) as total_ads,
+             AVG(EXTRACT(DAY FROM (now()-start_time)))::int as avg_days,
+             MAX(EXTRACT(DAY FROM (now()-start_time)))::int as max_days
+           FROM competitor_snapshots
+           WHERE start_time IS NOT NULL AND (stop_time IS NULL OR stop_time > now())
+             AND (%s = '' OR body ILIKE %s OR title ILIKE %s OR page_name ILIKE %s)""",
+        (keyword, f"%{keyword}%", f"%{keyword}%", f"%{keyword}%")
+    ).fetchone()
+
+    conn.close()
+
+    if not age_dist or age_dist[5] == 0:
+        return jsonify({"error": "لا توجد بيانات كافية في الـ DB — شغّل run أول"})
+
+    total_ads        = age_dist[5] or 0
+    total_advertisers= age_dist[4] or 0
+    avg_days         = age_dist[6] or 0
+    max_days         = age_dist[7] or 0
+    veteran_pct      = round((age_dist[3] or 0) / max(total_ads, 1) * 100)
+    mature_pct       = round((age_dist[2] or 0) / max(total_ads, 1) * 100)
+
+    # ── نص الإعلانات للتحليل ──────────────────────────────────────────────
+    sample_texts = []
+    seen = set()
+    for r in rows[:50]:
+        txt = (r[3] or r[4] or "").strip()[:200]
+        if txt and txt not in seen:
+            seen.add(txt)
+            sample_texts.append({"advertiser": r[0], "country": r[1],
+                                  "days": r[2], "text": txt})
+
+    # ── إحصائيات ──────────────────────────────────────────────────────────
+    country_data = [{"country": r[0], "ads": r[1],
+                     "advertisers": r[2], "avg_days": r[3]}
+                    for r in by_country[:8]]
+
+    stats = {
+        "keyword": keyword or "كل الإعلانات",
+        "total_ads": total_ads,
+        "total_advertisers": total_advertisers,
+        "avg_days": avg_days,
+        "max_days": max_days,
+        "veteran_pct": veteran_pct,
+        "mature_pct": mature_pct,
+        "new_entrants_14d": new_entrants,
+        "by_country": country_data,
+        "age_dist": {
+            "new": age_dist[0], "mid": age_dist[1],
+            "mature": age_dist[2], "veteran": age_dist[3]
+        }
+    }
+
+    # ── Claude Analysis ────────────────────────────────────────────────────
+    if not api_key:
+        return jsonify({"stats": stats, "analysis": None,
+                        "error": "ANTHROPIC_API_KEY not set — add to dashboard variables"})
+
+    prompt = f"""أنت محلل تسويقي متخصص في السوق العربي للـ ecommerce.
+بناءً على بيانات إعلانات Meta Ad Library:
+
+الـ Keyword: "{keyword or 'كل الإعلانات'}"
+إجمالي الإعلانات: {total_ads} | المعلنون: {total_advertisers}
+متوسط عمر الإعلان: {avg_days} يوم | أطول: {max_days} يوم
+إعلانات +90 يوم (veterans): {veteran_pct}%
+إعلانات 30-90 يوم (mature): {mature_pct}%
+منافسون جدد آخر 14 يوم: {new_entrants}
+
+توزيع الدول:
+{_j.dumps(country_data, ensure_ascii=False, indent=2)}
+
+عينة من الإعلانات الرابحة (+30 يوم):
+{_j.dumps([x for x in sample_texts if (x.get('days') or 0) >= 30][:15], ensure_ascii=False, indent=2)}
+
+أجب بـ JSON فقط بهذا الشكل:
+{{
+  "viability_score": 0-100,
+  "viability_label": "ممتاز/جيد/متوسط/محفوف بالمخاطر/اتجنب",
+  "signal": "شراء الآن/انتظر/اتجنب",
+  "signal_reason": "سبب القرار في جملة",
+  "best_country": "أفضل دولة للدخول",
+  "best_country_reason": "سبب",
+  "longevity_verdict": "تفسير توزيع الأعمار (هل المنتج يبيع؟)",
+  "winning_angles": ["زاوية 1", "زاوية 2", "زاوية 3"],
+  "price_points": ["سعر مذكور 1", "سعر 2"],
+  "dominant_hooks": ["hook رابح 1", "hook 2"],
+  "fatigue_alert": "هل في creative fatigue؟ وما هو؟",
+  "entry_timing": "متى أفضل وقت للدخول؟",
+  "avoid_angles": ["زاوية مشبعة تجنبها 1", "2"],
+  "new_entrants_signal": "ماذا يعني دخول {new_entrants} منافس جديد؟",
+  "summary": "ملخص تنفيذي في 2-3 جمل"
+}}"""
+
+    try:
+        resp = req.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={"x-api-key": api_key, "anthropic-version": "2023-06-01",
+                     "content-type": "application/json"},
+            json={"model": "claude-sonnet-4-6", "max_tokens": 1500,
+                  "messages": [{"role": "user", "content": prompt}]},
+            timeout=60,
+        )
+        text  = resp.json()["content"][0]["text"]
+        clean = text.strip().replace("```json","").replace("```","").strip()
+        analysis = _j.loads(clean)
+        return jsonify({"stats": stats, "analysis": analysis})
+    except Exception as e:
+        return jsonify({"stats": stats, "analysis": None, "error": str(e)})
+
