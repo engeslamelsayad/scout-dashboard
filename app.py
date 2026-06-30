@@ -417,10 +417,6 @@ button:hover{background:#6a4de0}
 </div></body></html>"""
 
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
-
 # ═══ AI Term Suggestions ══════════════════════════════════════════════════════
 
 @app.route("/api/suggest-terms", methods=["POST"])
@@ -471,11 +467,11 @@ Search terms موجودة بالفعل: {context or "لا يوجد"}
 def api_winners_clear():
     """امسح سجل الـ winners المرسلة عشان تظهر من جديد في الـ digest."""
     conn = get_conn()
-    conn.execute("DELETE FROM agent_events WHERE type = 'creative_digest_sent'")
+    cur = conn.execute("DELETE FROM agent_events WHERE type = 'creative_digest_sent'")
+    count = cur.rowcount
     conn.commit()
-    count = conn.execute("SELECT changes()").fetchone()
     conn.close()
-    return jsonify({"ok": True, "message": "تم مسح سجل الـ Winners — ستظهر مجدداً في التقرير الجاي"})
+    return jsonify({"ok": True, "message": f"تم مسح سجل الـ Winners ({count} سجل) — ستظهر مجدداً في التقرير الجاي"})
 
 
 # ═══ Market Intelligence ══════════════════════════════════════════════════════
@@ -647,4 +643,9 @@ def api_market_intel():
         return jsonify({"stats": stats, "analysis": analysis})
     except Exception as e:
         return jsonify({"stats": stats, "analysis": None, "error": str(e)})
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
 
