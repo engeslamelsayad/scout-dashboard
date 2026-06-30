@@ -363,7 +363,7 @@ tr:hover td{background:#1e1e1e}
       <input type="number" id="winners-days" value="14" min="7" max="90" class="sm" style="margin:0 6px">
       يوم
       <button class="btn btn-g" onclick="loadWinners()" style="font-size:11px;padding:4px 10px">تحديث</button>
-      <button class="btn btn-r" onclick="clearWinners()" style="font-size:11px;padding:4px 10px;margin-right:6px">🗑 مسح السجل</button>
+      <button class="btn btn-r" onclick="clearWinners()" style="font-size:11px;padding:4px 10px;margin-right:6px">🗑 إخفاء الكل</button>
     </h3>
     <div class="info" style="margin-bottom:12px">اضغط 🗂 على أي إعلان لحفظه في الـ Swipe File</div>
     <div id="winners-grid" class="winner-grid"><div class="empty">جار التحميل...</div></div>
@@ -948,9 +948,10 @@ function filterRR() {
 
 // ── Winners Clear ─────────────────────────────────────────────────────────────
 async function clearWinners() {
-  if (!confirm('هذا سيمسح سجل الـ Winners المرسلة — ستظهر مجدداً في التقرير القادم. متأكد؟')) return;
+  if (!confirm('هذا سيخفي كل الإعلانات المعروضة حالياً في تاب Winners — هتفضل مخفية لحد ما يظهر إعلان جديد فعلاً. متأكد؟')) return;
   const r = await fetch('/api/winners/clear', {method:'POST'}).then(r=>r.json());
-  alert(r.message || '✅ تم المسح');
+  alert(r.message || '✅ تم الإخفاء');
+  loadWinners();
 }
 
 // ── AI Term Suggestions ───────────────────────────────────────────────────────

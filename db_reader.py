@@ -110,19 +110,42 @@ def get_runs(conn, limit: int = 20) -> list[dict]:
 # ── Winners ───────────────────────────────────────────────────────────────────
 
 def get_winners(conn, min_days: int = 14, limit: int = 40) -> list[dict]:
+    dismissed_at = get_winners_dismissed_at(conn)
     rows = conn.execute(
         """SELECT ad_id, page_name, country, body, snapshot_url,
                   EXTRACT(DAY FROM (now() - start_time))::int AS days
            FROM competitor_snapshots
            WHERE start_time IS NOT NULL
              AND (stop_time IS NULL OR stop_time > now())
+             AND (%s::timestamptz IS NULL OR start_time > %s::timestamptz)
            ORDER BY start_time ASC
-           LIMIT 200"""
+           LIMIT 200""",
+        (dismissed_at, dismissed_at),
     ).fetchall()
     cols = ["ad_id", "page_name", "country", "body", "snapshot_url", "days"]
     result = [dict(zip(cols, r)) for r in rows if (r[5] or 0) >= min_days]
     result.sort(key=lambda x: x["days"] or 0, reverse=True)
     return result[:limit]
+
+
+# ── Winners dismissal ("Hide all" button) ─────────────────────────────────────
+
+def get_winners_dismissed_at(conn):
+    """آخر وقت ضغط فيه المستخدم 'إخفاء الكل' — None لو متضغطش قبل كده."""
+    row = conn.execute(
+        "SELECT dismissed_at FROM winners_dismissed WHERE id = 1"
+    ).fetchone()
+    return row[0] if row else None
+
+
+def dismiss_all_winners(conn) -> None:
+    """اخفي كل الإعلانات اللي شايفها دلوقتي في تاب Winners — هتفضل مخفية
+    لحد ما إعلان جديد فعلاً (بدأ بعد دلوقتي) يعدّي حد الـ min_days."""
+    conn.execute(
+        """INSERT INTO winners_dismissed (id, dismissed_at) VALUES (1, now())
+           ON CONFLICT (id) DO UPDATE SET dismissed_at = EXCLUDED.dismissed_at"""
+    )
+    conn.commit()
 
 
 # ── Competitor activity ───────────────────────────────────────────────────────

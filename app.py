@@ -465,13 +465,19 @@ Search terms موجودة بالفعل: {context or "لا يوجد"}
 @app.route("/api/winners/clear", methods=["POST"])
 @login_required
 def api_winners_clear():
-    """امسح سجل الـ winners المرسلة عشان تظهر من جديد في الـ digest."""
+    """زرار 'إخفاء الكل' في تاب Winners: يخفي كل الإعلانات المعروضة حالياً في
+    الداشبورد (عن طريق تسجيل وقت الإخفاء)، ويمسح سجل التيليجرام الداخلي
+    كمان عشان نفس الإعلانات تقدر تتبعت في التقرير الجاي لو لسه شغّالة."""
     conn = get_conn()
     cur = conn.execute("DELETE FROM agent_events WHERE type = 'creative_digest_sent'")
-    count = cur.rowcount
+    digest_count = cur.rowcount
+    db.dismiss_all_winners(conn)
     conn.commit()
     conn.close()
-    return jsonify({"ok": True, "message": f"تم مسح سجل الـ Winners ({count} سجل) — ستظهر مجدداً في التقرير الجاي"})
+    return jsonify({
+        "ok": True,
+        "message": f"تم إخفاء كل إعلانات Winners الحالية من الداشبورد (وحُذف سجل التيليجرام: {digest_count}) — هتظهر إعلانات جديدة بس من دلوقتي فصاعداً"
+    })
 
 
 # ═══ Market Intelligence ══════════════════════════════════════════════════════
